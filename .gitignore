@@ -1,0 +1,7 @@
+*.vcxproj.user
+.vs/
+x64/
+bin/
+obj/
+Debug/
+Release/
