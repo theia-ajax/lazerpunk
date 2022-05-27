@@ -156,6 +156,7 @@
     <ClCompile Include="sprites.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="game.inl" />
     <ClInclude Include="sprites.h" />
     <ClInclude Include="types.h" />
   </ItemGroup>

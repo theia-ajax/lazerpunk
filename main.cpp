@@ -1,33 +1,31 @@
 
 #include "types.h"
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #include "sokol_time.h"
 #include "sprites.h"
 
-#include <box2d/box2d.h>
-
-struct Input
-{
-	struct Keys
-	{
-		bool currDown[SDL_NUM_SCANCODES];
-		bool prevDown[SDL_NUM_SCANCODES];
-	} keys;
-};
-
 namespace input
 {
-	void BeginNewFrame(Input& input);
-	void KeyDownEvent(Input& input, SDL_Scancode key, bool isPressed);
-	bool GetKey(const Input& input, SDL_Scancode key);
-	bool GetKeyDown(const Input& input, SDL_Scancode key);
-	bool GetKeyUp(const Input& input, SDL_Scancode key);
+	void BeginNewFrame();
+	void KeyDownEvent(SDL_Scancode key, bool isPressed, bool isRepeat);
+	bool GetKey(SDL_Scancode key);
+	bool GetKeyDown(SDL_Scancode key);
+	bool GetKeyUp(SDL_Scancode key);
+	bool GetKeyRepeat(SDL_Scancode key);
 }
 
 struct Vec2
 {
 	float x = 0.0f, y = 0.0f;
 };
+
+struct Point2I
+{
+	int x = 0, y = 0;
+};
+
+inline int clamp(int v, int min, int max) { return (v < min) ? min : ((v > max) ? max : v); }
 
 struct Camera
 {
@@ -41,8 +39,29 @@ namespace camera
 	Vec2 WorldToScreen(const Camera& camera, Vec2 world);
 }
 
+void DrawBox(SDL_Renderer* renderer, const SDL_Rect* rect);
+
+constexpr uint64_t TicksInSecond(double sec) {
+	return (uint64_t)(sec * 1000000000.0);
+}
+
+struct GameTime
+{
+	GameTime(double elapsed, double delta) : elapsedSec(elapsed), deltaSec(delta) {}
+	float t() const { return static_cast<float>(elapsedSec); }
+	float dt() const { return static_cast<float>(deltaSec); }
+private:
+	const double elapsedSec;
+	const double deltaSec;
+};
+#include "game.inl"
+
 int main(int argc, char* argv[])
 {
+	TTF_Init();
+
+	TTF_Font* debugFont = TTF_OpenFont("assets/PressStart2P-Regular.ttf", 8);
+
 	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 	SDL_RenderSetLogicalSize(renderer, 320, 180);
@@ -58,41 +77,27 @@ int main(int argc, char* argv[])
 
 	SpriteSheet sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);
 
-	Input gameInput = {};
-
 	stm_setup();
 
 	uint64_t startTime = stm_now();
 	uint64_t clock = startTime;
-	double fixedTimestep = 1.0 / 60.0;
-	double timeSinceLastFixed = 0.0;
+	constexpr double kFixedTimeStepSec = 1.0 / 60.0;
+	constexpr uint64_t kFixedTimeStepTicks = TicksInSecond(kFixedTimeStepSec);
+	uint64_t lastFixedUpdate = startTime;
 
-	b2Vec2 gravity(0.0f, -10.0f);
-	b2World world(gravity);
-
-	b2BodyDef groundBodyDef;
-	groundBodyDef.position.Set(0.0f, -6.0f);
-	b2Body* groundBody = world.CreateBody(&groundBodyDef);
-	b2PolygonShape groundShape;
-	groundShape.SetAsBox(50.0f, 1.0f);
-	groundBody->CreateFixture(&groundShape, 0.0f);
-
-	b2BodyDef bodyDef;
-	bodyDef.type = b2_dynamicBody;
-	bodyDef.position = { 0.0f, 4.0f };
-	b2Body* body = world.CreateBody(&bodyDef);
-	b2PolygonShape dynamicShape;
-	dynamicShape.SetAsBox(1.0f, 1.0f);
-	b2FixtureDef fixtureDef;
-	fixtureDef.shape = &dynamicShape;
-	fixtureDef.density = 1.0f;
-	fixtureDef.friction = 0.3f;
-	body->CreateFixture(&fixtureDef);
+	GameState state = {
+		.camera = gameCamera,
+		.sprites = sheet,
+	};
+	game::Init(state);
 
 	bool isRunning = true;
+	bool showSpriteSheet = false;
+	Vec2 ssvOffset = {};
+	Point2I ssvSelection = {};
 	while (isRunning)
 	{
-		input::BeginNewFrame(gameInput);
+		input::BeginNewFrame();
 
 		{
 			SDL_Event event;
@@ -105,56 +110,99 @@ int main(int argc, char* argv[])
 					break;
 				case SDL_KEYDOWN:
 				case SDL_KEYUP:
-					input::KeyDownEvent(gameInput, event.key.keysym.scancode, event.type == SDL_KEYDOWN);
+					input::KeyDownEvent(event.key.keysym.scancode, event.type == SDL_KEYDOWN, event.key.repeat);
 					break;
 				}
 			}
 		}
-
-		if (input::GetKeyDown(gameInput, SDL_SCANCODE_ESCAPE))
+		if (input::GetKeyDown(SDL_SCANCODE_ESCAPE))
 		{
 			isRunning = false;
+		}
+
+		if (input::GetKeyDown(SDL_SCANCODE_F1))
+		{
+			showSpriteSheet = !showSpriteSheet;
 		}
 
 		uint64_t deltaTime = stm_laptime(&clock);
 		uint64_t elapsed = stm_diff(stm_now(), startTime);
 		double elapsedSec = stm_sec(elapsed);
-		float elapsedSecF = static_cast<float>(elapsedSec);
-		static bool showSpriteSheet = false;
+		double deltaSec = stm_sec(deltaTime);
 
-		if (elapsedSec >= timeSinceLastFixed + fixedTimestep)
+		GameTime gameTime(elapsedSec, deltaSec);
+		game::Update(state, gameTime);
+
+		if (elapsed >= lastFixedUpdate + kFixedTimeStepTicks)
 		{
-			constexpr int32 velocityIter = 6;
-			constexpr int32 positionIter = 2;
-			world.Step((float)fixedTimestep, velocityIter, positionIter);
-			printf("%4.2f %4.2f\n", body->GetPosition().x, body->GetPosition().y);
-			timeSinceLastFixed += fixedTimestep;
+			lastFixedUpdate += kFixedTimeStepTicks;
+			// fixed update here... 
 		}
-
-		if (input::GetKeyDown(gameInput, SDL_SCANCODE_F1))
-		{
-			showSpriteSheet = !showSpriteSheet;
-		}
-
-		SDL_RenderClear(renderer);
 
 		if (showSpriteSheet)
 		{
+			if (input::GetKeyRepeat(SDL_SCANCODE_H)) ssvSelection.x--;
+			if (input::GetKeyRepeat(SDL_SCANCODE_L)) ssvSelection.x++;
+			if (input::GetKeyRepeat(SDL_SCANCODE_K)) ssvSelection.y--;
+			if (input::GetKeyRepeat(SDL_SCANCODE_J)) ssvSelection.y++;
+
+			ssvSelection.x = clamp(ssvSelection.x, 0, sprite_sheet::Columns(sheet) - 1);
+			ssvSelection.y = clamp(ssvSelection.y, 0, sprite_sheet::Rows(sheet) - 1);
+
+			Point2I viewBase{ static_cast<int>(-ssvOffset.x / sheet._spriteWidth), static_cast<int>(-ssvOffset.y / sheet._spriteHeight) };
+
+			if (ssvSelection.x - viewBase.x > 15) viewBase.x = ssvSelection.x - 15;
+			if (ssvSelection.x - viewBase.x < 0) viewBase.x = ssvSelection.x;
+			if (ssvSelection.y - viewBase.y > 10) viewBase.y = ssvSelection.y - 10;
+			if (ssvSelection.y - viewBase.y < 0) viewBase.y = ssvSelection.y;
+
+			ssvOffset.x = -viewBase.x * sheet._spriteWidth;
+			ssvOffset.y = -viewBase.y * sheet._spriteHeight;
+		}
+
+		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+		SDL_RenderClear(renderer);
+		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+
+		game::Render(state);
+
+		if (showSpriteSheet)
+		{
+			SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+			SDL_RenderClear(renderer);
+
 			for (int y = 0; y < sprite_sheet::Rows(sheet); ++y)
 			{
 				for (int x = 0; x < sprite_sheet::Columns(sheet); ++x)
 				{
 					int spriteId = sprite_sheet::GetSpriteId(sheet, x, y);
-					sprite::Draw(renderer, sheet, spriteId, (float)x * sheet._spriteWidth, (float)y * sheet._spriteHeight);
+					sprite::Draw(sheet, spriteId, (float)x * sheet._spriteWidth + ssvOffset.x, (float)y * sheet._spriteHeight + ssvOffset.y);
 				}
 			}
-		}
 
-		b2Vec2 position = body->GetPosition();
-		Vec2 worldPos{ position.x, position.y };
-		Vec2 screenPos = camera::WorldToScreen(gameCamera, worldPos);;
-		
-		sprite::Draw(renderer, sheet, 18 + 7 * 49, screenPos.x, screenPos.y);
+			SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+			SDL_Rect selRect{ static_cast<int>(ssvSelection.x * sheet._spriteWidth + ssvOffset.x), static_cast<int>(ssvSelection.y * sheet._spriteHeight + ssvOffset.y), sheet._spriteWidth, sheet._spriteHeight };
+			SDL_RenderDrawRect(renderer, &selRect);
+
+			int canvasX, canvasY;
+			SDL_RenderGetLogicalSize(renderer, &canvasX, &canvasY);
+
+			SDL_Rect panelRect{ canvasX - 64, 0, 64, canvasY };
+			SDL_SetRenderDrawColor(renderer, 32, 32, 32, 255);
+			SDL_RenderFillRect(renderer, &panelRect);
+			SDL_SetRenderDrawColor(renderer, 192, 192, 192, 255);
+			SDL_RenderDrawRect(renderer, &panelRect);
+
+			char buffer[16];
+			int selSpriteId = ssvSelection.y * sprite_sheet::Columns(sheet) + ssvSelection.x;
+			snprintf(buffer, 16, "%d", selSpriteId);
+			SDL_Surface* textSurface = TTF_RenderText_Solid(debugFont, buffer, SDL_Color{ 192, 192, 192, 255 });
+			SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+			SDL_Rect textRect{ panelRect.x + 4, panelRect.y + 2, textSurface->w, textSurface->h };
+			SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
+			SDL_DestroyTexture(textTexture);
+			SDL_FreeSurface(textSurface);
+		}
 
 		SDL_RenderPresent(renderer);
 	}
@@ -164,32 +212,69 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
+void DrawBox(SDL_Renderer* renderer, const SDL_Rect* rect)
+{
+	SDL_Point points[5] = {
+		{ rect->x, rect->y },
+		{ rect->x + rect->w, rect->y },
+		{ rect->x + rect->w, rect->y + rect->h },
+		{ rect->x, rect->y + rect->h },
+		{ rect->x, rect->y },
+	};
+	SDL_RenderDrawLines(renderer, points, 5);
+}
 
 namespace input
 {
-	void BeginNewFrame(Input& input)
+	struct Input
+	{
+		struct KeyState
+		{
+			bool isDown;
+			bool isRepeat;
+		};
+
+		struct Keys
+		{
+			KeyState currDown[SDL_NUM_SCANCODES];
+			KeyState prevDown[SDL_NUM_SCANCODES];
+		} keys;
+	};
+
+	namespace
+	{
+		Input input{};
+	}
+
+
+	void BeginNewFrame()
 	{
 		std::memcpy(input.keys.prevDown, input.keys.currDown, sizeof(input.keys.currDown));
 	}
 
-	void KeyDownEvent(Input& input, SDL_Scancode key, bool isPressed)
+	void KeyDownEvent(SDL_Scancode key, bool isPressed, bool isRepeat)
 	{
-		input.keys.currDown[key] = isPressed;
+		input.keys.currDown[key] = { isPressed, isRepeat };
 	}
 
-	bool GetKey(const Input& input, SDL_Scancode key)
+	bool GetKey(SDL_Scancode key)
 	{
-		return input.keys.currDown[key];
+		return input.keys.currDown[key].isDown;
 	}
 
-	bool GetKeyDown(const Input& input, SDL_Scancode key)
+	bool GetKeyDown(SDL_Scancode key)
 	{
-		return input.keys.currDown[key] && !input.keys.prevDown[key];
+		return input.keys.currDown[key].isDown && !input.keys.prevDown[key].isDown && !input.keys.currDown[key].isRepeat;
 	}
 
-	bool GetKeyUp(const Input& input, SDL_Scancode key)
+	bool GetKeyUp(SDL_Scancode key)
 	{
-		return !input.keys.currDown[key] && input.keys.prevDown[key];
+		return !input.keys.currDown[key].isDown && input.keys.prevDown[key].isDown;
+	}
+
+	bool GetKeyRepeat(SDL_Scancode key)
+	{
+		return input.keys.currDown[key].isDown && input.keys.currDown[key].isRepeat || GetKeyDown(key);
 	}
 }
 
@@ -197,6 +282,6 @@ Vec2 camera::WorldToScreen(const Camera& camera, Vec2 world)
 {
 	Vec2 result;
 	result.x = world.x * camera.pixelsToUnit + camera.extents.x / 2 - camera.position.x * camera.pixelsToUnit;
-	result.y = -world.y * camera.pixelsToUnit + camera.extents.y / 2 - camera.position.y * camera.pixelsToUnit;
+	result.y = world.y * camera.pixelsToUnit + camera.extents.y / 2 - camera.position.y * camera.pixelsToUnit;
 	return result;
 }

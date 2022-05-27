@@ -42,6 +42,7 @@ SpriteSheet sprite_sheet::Create(SDL_Renderer* renderer, const char* fileName, i
 	int spriteCols = findCount(sheetWidth, spriteWidth, padding);
 
 	SpriteSheet result = SpriteSheet{
+		._renderer = renderer,
 		._surface = surface,
 		._texture = texture,
 		._width = sheetWidth,
@@ -106,14 +107,22 @@ int sprite_sheet::GetSpriteId(const SpriteSheet& sheet, int spriteX, int spriteY
 	}
 }
 
-void sprite::Draw(SDL_Renderer* renderer, const SpriteSheet& sheet, int spriteId, float x, float y)
+namespace internal
 {
-	constexpr float spriteScale = 1.0f;
-	SpriteRect sourceRect = sprite_sheet::GetRect(sheet, spriteId);
-	SDL_Rect destRect;
-	destRect.x = static_cast<int>(x * spriteScale);
-	destRect.y = static_cast<int>(y * spriteScale);
-	destRect.w = static_cast<int>(sheet._spriteWidth * spriteScale);
-	destRect.h = static_cast<int>(sheet._spriteHeight * spriteScale);
-	SDL_RenderCopy(renderer, sheet._texture, reinterpret_cast<SDL_Rect*>(&sourceRect), &destRect);
+	void Draw(const SpriteSheet& sheet, int spriteId, float x, float y)
+	{
+		constexpr float spriteScale = 1.0f;
+		SpriteRect sourceRect = sprite_sheet::GetRect(sheet, spriteId);
+		SDL_Rect destRect;
+		destRect.x = static_cast<int>(x * spriteScale);
+		destRect.y = static_cast<int>(y * spriteScale);
+		destRect.w = static_cast<int>(sheet._spriteWidth * spriteScale);
+		destRect.h = static_cast<int>(sheet._spriteHeight * spriteScale);
+		SDL_RenderCopy(sheet._renderer, sheet._texture, reinterpret_cast<SDL_Rect*>(&sourceRect), &destRect);
+	}
+}
+
+void sprite::Draw(const SpriteSheet& sheet, int spriteId, float x, float y)
+{
+	internal::Draw(sheet, spriteId, x, y);
 }

@@ -32,5 +32,8 @@
     <ClInclude Include="sprites.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="game.inl">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
