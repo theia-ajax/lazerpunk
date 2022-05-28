@@ -109,20 +109,16 @@ int sprite_sheet::GetSpriteId(const SpriteSheet& sheet, int spriteX, int spriteY
 
 namespace internal
 {
-	void Draw(const SpriteSheet& sheet, int spriteId, float x, float y)
+	void Draw(const SpriteSheet& sheet, int spriteId, float x, float y, float angle, SpriteFlipFlags flipFlags, float originX, float originY)
 	{
-		constexpr float spriteScale = 1.0f;
 		SpriteRect sourceRect = sprite_sheet::GetRect(sheet, spriteId);
-		SDL_Rect destRect;
-		destRect.x = static_cast<int>(x * spriteScale);
-		destRect.y = static_cast<int>(y * spriteScale);
-		destRect.w = static_cast<int>(sheet._spriteWidth * spriteScale);
-		destRect.h = static_cast<int>(sheet._spriteHeight * spriteScale);
-		SDL_RenderCopy(sheet._renderer, sheet._texture, reinterpret_cast<SDL_Rect*>(&sourceRect), &destRect);
+
+		SDL_FRect destRect{x - sheet._spriteWidth * originX, y - sheet._spriteHeight * originY, static_cast<float>(sheet._spriteWidth), static_cast<float>(sheet._spriteHeight)};
+		SDL_RenderCopyExF(sheet._renderer, sheet._texture, reinterpret_cast<SDL_Rect*>(&sourceRect), &destRect, static_cast<double>(angle), nullptr, (SDL_RendererFlip)flipFlags);
 	}
 }
 
-void sprite::Draw(const SpriteSheet& sheet, int spriteId, float x, float y)
+void sprite::Draw(const SpriteSheet& sheet, int spriteId, float x, float y, float angle, SpriteFlipFlags flipFlags, float originX, float originY)
 {
-	internal::Draw(sheet, spriteId, x, y);
+	internal::Draw(sheet, spriteId, x, y, angle, flipFlags, originX, originY);
 }

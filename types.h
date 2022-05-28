@@ -3,6 +3,7 @@
 #include <cstring>
 #include <cstdint>
 #include <cassert>
+#include "enumflag.h"
 
 #define ASSERT(expr) assert(expr)
 

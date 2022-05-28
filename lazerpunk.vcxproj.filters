@@ -35,5 +35,20 @@
     <ClInclude Include="game.inl">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="enumflag.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="assets\PressStart2P-Regular.ttf" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\spritesheet.png">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\spritesheet.tsj" />
+    <None Include="assets\testmap.tmj" />
   </ItemGroup>
 </Project>

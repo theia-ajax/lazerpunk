@@ -107,6 +107,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <DisableSpecificWarnings>C26812</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -141,6 +142,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
+      <DisableSpecificWarnings>C26812</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -156,9 +158,20 @@
     <ClCompile Include="sprites.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="enumflag.h" />
     <ClInclude Include="game.inl" />
     <ClInclude Include="sprites.h" />
     <ClInclude Include="types.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="assets\PressStart2P-Regular.ttf" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="assets\spritesheet.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\spritesheet.tsj" />
+    <None Include="assets\testmap.tmj" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

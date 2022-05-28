@@ -64,16 +64,13 @@ int main(int argc, char* argv[])
 
 	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-	SDL_RenderSetLogicalSize(renderer, 320, 180);
 
+	SDL_RenderSetLogicalSize(renderer, 256, 144);
 	Camera gameCamera;
-
-	{
-		int lsX, lsY;
-		SDL_RenderGetLogicalSize(renderer, &lsX, &lsY);
-		gameCamera.extents.x = static_cast<float>(lsX);
-		gameCamera.extents.y = static_cast<float>(lsY);
-	}
+	int canvasX, canvasY;
+	SDL_RenderGetLogicalSize(renderer, &canvasX, &canvasY);
+	gameCamera.extents.x = static_cast<float>(canvasX);
+	gameCamera.extents.y = static_cast<float>(canvasY);
 
 	SpriteSheet sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);
 
@@ -151,20 +148,22 @@ int main(int argc, char* argv[])
 
 			Point2I viewBase{ static_cast<int>(-ssvOffset.x / sheet._spriteWidth), static_cast<int>(-ssvOffset.y / sheet._spriteHeight) };
 
-			if (ssvSelection.x - viewBase.x > 15) viewBase.x = ssvSelection.x - 15;
+			int maxX = (canvasX - 64) / 16 - 1;
+			int maxY = canvasY / 16 - 1;
+			if (ssvSelection.x - viewBase.x > maxX) viewBase.x = ssvSelection.x - maxX;
 			if (ssvSelection.x - viewBase.x < 0) viewBase.x = ssvSelection.x;
-			if (ssvSelection.y - viewBase.y > 10) viewBase.y = ssvSelection.y - 10;
+			if (ssvSelection.y - viewBase.y > maxY) viewBase.y = ssvSelection.y - maxY;
 			if (ssvSelection.y - viewBase.y < 0) viewBase.y = ssvSelection.y;
 
-			ssvOffset.x = -viewBase.x * sheet._spriteWidth;
-			ssvOffset.y = -viewBase.y * sheet._spriteHeight;
+			ssvOffset.x = static_cast<float>(-viewBase.x * sheet._spriteWidth);
+			ssvOffset.y = static_cast<float>(-viewBase.y * sheet._spriteHeight);
 		}
 
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
 		SDL_RenderClear(renderer);
 		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
-		game::Render(state);
+		game::Render(state, gameTime);
 
 		if (showSpriteSheet)
 		{
@@ -176,7 +175,7 @@ int main(int argc, char* argv[])
 				for (int x = 0; x < sprite_sheet::Columns(sheet); ++x)
 				{
 					int spriteId = sprite_sheet::GetSpriteId(sheet, x, y);
-					sprite::Draw(sheet, spriteId, (float)x * sheet._spriteWidth + ssvOffset.x, (float)y * sheet._spriteHeight + ssvOffset.y);
+					sprite::Draw(sheet, spriteId, (float)x * sheet._spriteWidth + ssvOffset.x, (float)y * sheet._spriteHeight + ssvOffset.y, 0.0, SpriteFlipFlags::None);
 				}
 			}
 
@@ -184,21 +183,18 @@ int main(int argc, char* argv[])
 			SDL_Rect selRect{ static_cast<int>(ssvSelection.x * sheet._spriteWidth + ssvOffset.x), static_cast<int>(ssvSelection.y * sheet._spriteHeight + ssvOffset.y), sheet._spriteWidth, sheet._spriteHeight };
 			SDL_RenderDrawRect(renderer, &selRect);
 
-			int canvasX, canvasY;
-			SDL_RenderGetLogicalSize(renderer, &canvasX, &canvasY);
-
 			SDL_Rect panelRect{ canvasX - 64, 0, 64, canvasY };
 			SDL_SetRenderDrawColor(renderer, 32, 32, 32, 255);
 			SDL_RenderFillRect(renderer, &panelRect);
 			SDL_SetRenderDrawColor(renderer, 192, 192, 192, 255);
 			SDL_RenderDrawRect(renderer, &panelRect);
 
-			char buffer[16];
+			char buffer[32];
 			int selSpriteId = ssvSelection.y * sprite_sheet::Columns(sheet) + ssvSelection.x;
-			snprintf(buffer, 16, "%d", selSpriteId);
-			SDL_Surface* textSurface = TTF_RenderText_Solid(debugFont, buffer, SDL_Color{ 192, 192, 192, 255 });
+			snprintf(buffer, 32, "ID:%d\nX :%d\nY :%d", selSpriteId, ssvSelection.x, ssvSelection.y);
+			SDL_Surface* textSurface = TTF_RenderText_Blended_Wrapped(debugFont, buffer, SDL_Color{ 192, 192, 192, 255 }, 64);
 			SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-			SDL_Rect textRect{ panelRect.x + 4, panelRect.y + 2, textSurface->w, textSurface->h };
+			SDL_Rect textRect{ panelRect.x + 2, panelRect.y + 2, textSurface->w, textSurface->h };
 			SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
 			SDL_DestroyTexture(textTexture);
 			SDL_FreeSurface(textSurface);

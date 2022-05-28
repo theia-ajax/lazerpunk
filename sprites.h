@@ -26,6 +26,13 @@ struct SpriteRect
 	int x, y, w, h;
 };
 
+enum class SpriteFlipFlags
+{
+	None = 0,
+	FlipX = 1,
+	FlipY = 2,
+};
+
 namespace sprite_sheet
 {
 	inline bool IsValid(const SpriteSheet& sheet) { return sheet._texture != nullptr; }
@@ -41,5 +48,5 @@ namespace sprite_sheet
 
 namespace sprite
 {
-	void Draw(const SpriteSheet& sheet, int spriteId, float x, float y);
+	void Draw(const SpriteSheet& sheet, int spriteId, float x, float y, float angle = 0.0f, SpriteFlipFlags flipFlags = SpriteFlipFlags::None, float originX = 0.0f, float originY = 0.0f);
 }
