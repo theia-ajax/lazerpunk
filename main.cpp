@@ -4,6 +4,10 @@
 #include <SDL2/SDL_ttf.h>
 #include "sokol_time.h"
 #include "sprites.h"
+#include <vector>
+#include <fstream>
+#include <rapidjson/document.h>
+#include <rapidjson/istreamwrapper.h>
 
 namespace input
 {
@@ -45,6 +49,29 @@ constexpr uint64_t TicksInSecond(double sec) {
 	return (uint64_t)(sec * 1000000000.0);
 }
 
+struct GameMapTile
+{
+	int id;
+};
+
+struct GameMapTileLayer
+{
+	int width;
+	int height;
+	std::vector<GameMapTile> tiles;
+};
+
+struct GameMap
+{
+	GameMapTileLayer layer;
+};
+
+namespace map
+{
+	GameMap Load(const char* fileName);
+	void Draw(const GameMap& map, const Camera& camera, const SpriteSheet& sheet);
+}
+
 struct GameTime
 {
 	GameTime(double elapsed, double delta) : elapsedSec(elapsed), deltaSec(delta) {}
@@ -82,9 +109,12 @@ int main(int argc, char* argv[])
 	constexpr uint64_t kFixedTimeStepTicks = TicksInSecond(kFixedTimeStepSec);
 	uint64_t lastFixedUpdate = startTime;
 
+	GameMap map = map::Load("assets/testmap.tmj");
+
 	GameState state = {
 		.camera = gameCamera,
 		.sprites = sheet,
+		.map = map,
 	};
 	game::Init(state);
 
@@ -277,7 +307,64 @@ namespace input
 Vec2 camera::WorldToScreen(const Camera& camera, Vec2 world)
 {
 	Vec2 result;
-	result.x = world.x * camera.pixelsToUnit + camera.extents.x / 2 - camera.position.x * camera.pixelsToUnit;
-	result.y = world.y * camera.pixelsToUnit + camera.extents.y / 2 - camera.position.y * camera.pixelsToUnit;
+	result.x = world.x * camera.pixelsToUnit - camera.position.x * camera.pixelsToUnit;
+	result.y = world.y * camera.pixelsToUnit - camera.position.y * camera.pixelsToUnit;
 	return result;
+}
+
+GameMap map::Load(const char* fileName)
+{
+	std::ifstream inFileStream(fileName);
+	rapidjson::IStreamWrapper streamWrapper(inFileStream);
+
+	rapidjson::Document doc;
+	doc.ParseStream(streamWrapper);
+
+	ASSERT(doc.IsObject());
+	ASSERT(doc.HasMember("layers"));
+	ASSERT(doc["layers"].IsArray());
+	ASSERT(doc["layers"].Capacity() > 0);
+
+	ASSERT(doc["layers"][0].HasMember("width"));
+	ASSERT(doc["layers"][0].HasMember("height"));
+	ASSERT(doc["layers"][0].HasMember("data"));
+
+	int width = doc["layers"][0]["width"].GetInt();
+	int height = doc["layers"][0]["height"].GetInt();
+
+	size_t size = static_cast<size_t>(width * height);
+
+	ASSERT(doc["layers"][0]["data"].IsArray());
+	ASSERT(doc["layers"][0]["data"].Capacity() == size);
+
+	GameMap result{};
+
+	result.layer.width = width;
+	result.layer.height = height;
+	result.layer.tiles.resize(size);
+
+	for (size_t i = 0; i < size; ++i)
+	{
+		int id = doc["layers"][0]["data"][i].GetInt();
+		result.layer.tiles[i] = GameMapTile{ id };
+	}
+
+	return result;
+}
+
+void map::Draw(const GameMap& map, const Camera& camera, const SpriteSheet& sheet)
+{
+	for (size_t i = 0; i < map.layer.tiles.size(); ++i)
+	{
+		GameMapTile tile = map.layer.tiles[i];
+
+		if (tile.id > 0)
+		{
+			int tx = i % map.layer.width;
+			int ty = i / map.layer.width;
+			Vec2 worldPos{ static_cast<float>(tx) , static_cast<float>(ty) };
+			Vec2 screenPos = camera::WorldToScreen(camera, worldPos);
+			sprite::Draw(sheet, tile.id - 1, screenPos.x, screenPos.y);
+		}
+	}
 }

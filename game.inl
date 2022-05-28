@@ -13,6 +13,7 @@ struct GameState
 {
 	Camera camera;
 	SpriteSheet sprites{};
+	GameMap map;
 
 	bool moveDown[Direction::Count] = {};
 	float moveDownTimestamp[Direction::Count] = {};
@@ -25,7 +26,7 @@ namespace game
 {
 	void Init(GameState& game)
 	{
-		
+		game.playerPos = { 8, 5 };
 	}
 
 	float Length(const Vec2& v) { return v.x * v.x + v.y * v.y; }
@@ -85,6 +86,8 @@ namespace game
 
 	void Render(const GameState& game, const GameTime& time)
 	{
+		map::Draw(game.map, game.camera, game.sprites);
+
 		Vec2 screenPos = camera::WorldToScreen(game.camera, game.playerPos);
 
 		int spriteId;
