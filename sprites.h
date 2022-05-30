@@ -31,6 +31,7 @@ enum class SpriteFlipFlags
 	None = 0,
 	FlipX = 1,
 	FlipY = 2,
+	FlipDiag = 4,
 };
 
 namespace sprite_sheet
@@ -42,7 +43,7 @@ namespace sprite_sheet
 
 	SpriteSheet Create(SDL_Renderer* renderer, const char* fileName, int spriteWidth, int spriteHeight, int padding);
 	void Destroy(SpriteSheet* sheet);
-	SpriteRect GetRect(const SpriteSheet& sheet, int spriteId);
+	SpriteRect GetRect(const SpriteSheet& sheet, int spriteId, bool rotated = false);
 	int GetSpriteId(const SpriteSheet& sheet, int spriteX, int spriteY);
 }
 

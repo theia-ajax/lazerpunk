@@ -82,6 +82,11 @@ namespace game
 
 		if (direction != Direction::Invalid)
 			game.playerFacing = direction;
+
+		if (game.playerPos.x > game.camera.position.x + 10) game.camera.position.x = game.playerPos.x - 10;
+		if (game.playerPos.x < game.camera.position.x + 5) game.camera.position.x = game.playerPos.x - 5;
+		if (game.playerPos.y > game.camera.position.y + 6) game.camera.position.y = game.playerPos.y - 6;
+		if (game.playerPos.y < game.camera.position.y + 3) game.camera.position.y = game.playerPos.y - 3;
 	}
 
 	void Render(const GameState& game, const GameTime& time)

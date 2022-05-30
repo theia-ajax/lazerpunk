@@ -52,6 +52,9 @@ constexpr uint64_t TicksInSecond(double sec) {
 struct GameMapTile
 {
 	int id;
+	bool flipX;
+	bool flipY;
+	bool flipDiag;
 };
 
 struct GameMapTileLayer
@@ -343,10 +346,16 @@ GameMap map::Load(const char* fileName)
 	result.layer.height = height;
 	result.layer.tiles.resize(size);
 
-	for (size_t i = 0; i < size; ++i)
+	for (rapidjson::SizeType i = 0; i < size; ++i)
 	{
-		int id = doc["layers"][0]["data"][i].GetInt();
-		result.layer.tiles[i] = GameMapTile{ id };
+		//auto element = doc["layers"][0]["data"][i];
+		int64_t data = doc["layers"][0]["data"][i].GetInt64();
+		int id = data & 0x0FFFFFFF;
+		int flipFlags = static_cast<int>(data >> 28);
+		bool flipX = (data & 0x80000000);
+		bool flipY = (data & 0x40000000);
+		bool flipDiag = (data & 0x20000000);
+		result.layer.tiles[i] = GameMapTile{ id, flipX, flipY, flipDiag };
 	}
 
 	return result;
@@ -354,7 +363,10 @@ GameMap map::Load(const char* fileName)
 
 void map::Draw(const GameMap& map, const Camera& camera, const SpriteSheet& sheet)
 {
-	for (size_t i = 0; i < map.layer.tiles.size(); ++i)
+	static float aa = 0.0f;
+	aa += 0.1f;
+
+	for (rapidjson::SizeType i = 0; i < map.layer.tiles.size(); ++i)
 	{
 		GameMapTile tile = map.layer.tiles[i];
 
@@ -364,7 +376,20 @@ void map::Draw(const GameMap& map, const Camera& camera, const SpriteSheet& shee
 			int ty = i / map.layer.width;
 			Vec2 worldPos{ static_cast<float>(tx) , static_cast<float>(ty) };
 			Vec2 screenPos = camera::WorldToScreen(camera, worldPos);
-			sprite::Draw(sheet, tile.id - 1, screenPos.x, screenPos.y);
+
+			SpriteFlipFlags flipFlags = SpriteFlipFlags::None;
+			if (tile.flipX) flipFlags |= SpriteFlipFlags::FlipX;
+			if (tile.flipY) flipFlags |= SpriteFlipFlags::FlipY;
+			if (tile.flipDiag) flipFlags |= SpriteFlipFlags::FlipDiag;
+			sprite::Draw(sheet, tile.id - 1, screenPos.x, screenPos.y, 0.0f, flipFlags);
 		}
+	}
+}
+
+namespace internal
+{
+	void PrintAssert(const char* function, int lineNum, const char* exprStr)
+	{
+		printf("ASSERT FAILED (%s) in %s:%d\n", exprStr, function, lineNum);
 	}
 }
