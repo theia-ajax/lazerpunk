@@ -183,14 +183,7 @@ int main(int argc, char* argv[])
 	gameCamera.extents.x = static_cast<float>(canvasX);
 	gameCamera.extents.y = static_cast<float>(canvasY);
 
-	SpriteSheet sheet;
-	{
-		uint64_t s = stm_now();
-		sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);
-		uint64_t diff = stm_diff(stm_now(), s);
-		std::ofstream logFile("log.txt");
-		logFile << stm_ms(diff);
-	}
+	SpriteSheet sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);;
 
 	uint64_t startTime = stm_now();
 	uint64_t clock = startTime;
