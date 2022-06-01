@@ -39,14 +39,6 @@ namespace game
 		}
 		return Vec2{ v.x / l, v.y / l };
 	}
-	inline Vec2 operator+(const Vec2& lhs, const Vec2& rhs)
-	{
-		return Vec2{ lhs.x + rhs.x, lhs.y + rhs.y };
-	}
-	inline Vec2 operator*(const Vec2& lhs, float rhs)
-	{
-		return Vec2{ lhs.x * rhs, lhs.y * rhs };
-	}
 
 	void DirectionInput(bool down[Direction::Count], float timestamp[Direction::Count], SDL_Scancode key, int direction, float time)
 	{

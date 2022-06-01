@@ -42,12 +42,21 @@ namespace sprite_sheet
 	inline int SpriteCount(const SpriteSheet& sheet) { return Rows(sheet) * Columns(sheet); }
 
 	SpriteSheet Create(SDL_Renderer* renderer, const char* fileName, int spriteWidth, int spriteHeight, int padding);
-	void Destroy(SpriteSheet* sheet);
-	SpriteRect GetRect(const SpriteSheet& sheet, int spriteId, bool rotated = false);
+	void Destroy(SpriteSheet& sheet);
+	SpriteRect GetRect(const SpriteSheet& sheet, int spriteId, bool diagnolFlip = false);
 	int GetSpriteId(const SpriteSheet& sheet, int spriteX, int spriteY);
 }
 
 namespace sprite
 {
-	void Draw(const SpriteSheet& sheet, int spriteId, float x, float y, float angle = 0.0f, SpriteFlipFlags flipFlags = SpriteFlipFlags::None, float originX = 0.0f, float originY = 0.0f);
+	void Draw(const SpriteSheet& sheet,
+		int spriteId,
+		float x,
+		float y,
+		float angle = 0.0f,
+		SpriteFlipFlags flipFlags = SpriteFlipFlags::None,
+		float originX = 0.0f,
+		float originY = 0.0f,
+		float scaleX = 1.0f,
+		float scaleY = 1.0f);
 }

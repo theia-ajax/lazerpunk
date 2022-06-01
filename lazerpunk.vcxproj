@@ -158,11 +158,14 @@
     <ClCompile Include="impl.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="sprites.cpp" />
+    <ClCompile Include="stringid.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="enumflag.h" />
     <ClInclude Include="game.inl" />
     <ClInclude Include="sprites.h" />
+    <ClInclude Include="stringid.h" />
+    <ClInclude Include="strpool.h" />
     <ClInclude Include="types.h" />
   </ItemGroup>
   <ItemGroup>

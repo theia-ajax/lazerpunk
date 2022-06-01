@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cassert>
 #include "enumflag.h"
+#include "stringid.h"
 
 namespace internal { void PrintAssert(const char* function, int lineNum, const char* exprStr); }
 
