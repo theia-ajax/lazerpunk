@@ -366,22 +366,22 @@ namespace
 
 	void DrawLayer(const GameMapLayer& layer, const Camera& camera, const SpriteSheet& sheet)
 	{
-		std::visit([&camera, &sheet]<typename T0>(T0 && arg)
+		std::visit([&camera, &sheet](auto&& layer)
 		{
-			using T = std::decay_t<T0>;
-			if (arg.visible)
+			using T = std::decay_t<decltype(layer)>;
+			if (layer.visible)
 			{
 				if constexpr (std::is_same_v<T, GameMapTileLayer>)
 				{
-					DrawTileLayer(arg, camera, sheet);
+					DrawTileLayer(layer, camera, sheet);
 				}
 				else if constexpr (std::is_same_v<T, GameMapObjectLayer>)
 				{
-					DrawObjectLayer(arg, camera, sheet);
+					DrawObjectLayer(layer, camera, sheet);
 				}
 				else if constexpr (std::is_same_v<T, GameMapGroupLayer>)
 				{
-					DrawGroupLayer(arg, camera, sheet);
+					DrawGroupLayer(layer, camera, sheet);
 				}
 				else
 				{
@@ -393,9 +393,9 @@ namespace
 
 	constexpr StrId GetLayerNameId(GameMapLayer layer)
 	{
-		return std::visit([](auto&& arg) -> StrId
+		return std::visit([](auto&& layer) -> StrId
 			{
-				return arg.nameId;
+				return layer.nameId;
 			}, layer);
 	}
 }
