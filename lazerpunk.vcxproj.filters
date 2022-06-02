@@ -22,6 +22,9 @@
     <ClCompile Include="stringid.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="gamemap.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="types.h">
@@ -40,6 +43,9 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="stringid.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="gamemap.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>

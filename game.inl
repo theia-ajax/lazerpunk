@@ -83,7 +83,7 @@ namespace game
 
 	void Render(const GameState& game, const GameTime& time)
 	{
-		map::Draw(game.map, game.camera, game.sprites);
+		map::DrawLayers(game.map, game.camera, game.sprites, std::array{ StrId("Background") });
 
 		Vec2 screenPos = camera::WorldToScreen(game.camera, game.playerPos);
 
@@ -110,5 +110,7 @@ namespace game
 		sprite::Draw(game.sprites, spriteId, screenPos.x, screenPos.y, 0.0f, flip, 0.5f, 0.5f);
 		SDL_SetRenderDrawColor(game.sprites._renderer, 255, 0, 0, 255);
 		SDL_RenderDrawPointF(game.sprites._renderer, screenPos.x, screenPos.y);
+
+		map::DrawLayers(game.map, game.camera, game.sprites, std::array{ StrId("Foreground") });
 	}
 }
