@@ -58,11 +58,6 @@ int main(int argc, char* argv[])
 
 	SpriteSheet sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);;
 
-	uint64_t startTime = stm_now();
-	uint64_t clock = startTime;
-	constexpr double kFixedTimeStepSec = 1.0 / 60.0;
-	constexpr uint64_t kFixedTimeStepTicks = TicksInSecond(kFixedTimeStepSec);
-	uint64_t lastFixedUpdate = startTime;
 
 	GameMap map = map::Load("assets/testmap.tmj");
 
@@ -75,10 +70,23 @@ int main(int argc, char* argv[])
 	};
 	game::Init(state);
 
-	bool isRunning = true;
-	bool showSpriteSheet = false;
 	Vec2 ssvOffset = {};
 	Point2I ssvSelection = {};
+
+	uint64_t startTime = stm_now();
+	uint64_t clock = startTime;
+	uint64_t lastFrameTime = clock;
+	double targetFrameTime = 0.0;
+	double secondTimer = 1.0;
+	int frameCountThisSecond = 0;
+	int fps = 0;
+	constexpr double kFixedTimeStepSec = 1.0 / 120.0;
+	constexpr uint64_t kFixedTimeStepTicks = TicksInSecond(kFixedTimeStepSec);
+	double fixedUpdateTimer = 0.0;
+	double timeAccumulator = 0.0;
+
+	bool isRunning = true;
+	bool showSpriteSheet = false;
 	while (isRunning)
 	{
 		input::BeginNewFrame();
@@ -118,10 +126,28 @@ int main(int argc, char* argv[])
 		uint64_t elapsed = stm_diff(stm_now(), startTime);
 		double elapsedSec = stm_sec(elapsed);
 		double deltaSec = stm_sec(deltaTime);
-		double elapsedMs = stm_ms(deltaTime);
+
+		secondTimer -= deltaSec;
+		if (secondTimer <= 0.0)
+		{
+			secondTimer += 1.0;
+			fps = frameCountThisSecond;
+			frameCountThisSecond = 0;
+
+			char buffer[32];
+			snprintf(buffer, 32, "Lazer Punk (FPS:%d)", fps);
+			SDL_SetWindowTitle(window, buffer);
+		}
 
 		GameTime gameTime(elapsedSec, deltaSec);
 		game::Update(state, gameTime);
+
+		timeAccumulator += deltaSec;
+		while (timeAccumulator >= kFixedTimeStepSec)
+		{
+			game::FixedUpdate(state, GameTime{ elapsedSec, kFixedTimeStepSec });
+			timeAccumulator -= kFixedTimeStepSec;
+		}
 
 		if (showSpriteSheet)
 		{
@@ -188,6 +214,14 @@ int main(int argc, char* argv[])
 		}
 
 		SDL_RenderPresent(renderer);
+
+		++frameCountThisSecond;
+
+		if (targetFrameTime > 0)
+		{
+			while (stm_sec(stm_diff(stm_now(), lastFrameTime)) < targetFrameTime) {}
+			lastFrameTime = stm_now();
+		}
 	}
 
 	SDL_DestroyRenderer(renderer);

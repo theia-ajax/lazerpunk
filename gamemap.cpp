@@ -392,7 +392,7 @@ namespace
 				}
 				else if constexpr (std::is_same_v<T, GameMapObjectLayer>)
 				{
-					DrawObjectLayer(ctx, layer, camera, sheet);
+					//DrawObjectLayer(ctx, layer, camera, sheet);
 				}
 				else if constexpr (std::is_same_v<T, GameMapGroupLayer>)
 				{
