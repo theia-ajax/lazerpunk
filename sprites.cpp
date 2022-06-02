@@ -53,7 +53,6 @@ SpriteSheet sprite_sheet::Create(SDL_Renderer* renderer, const char* fileName, i
 	int spriteCols = findCount(sheetWidth, spriteWidth, padding, 0);
 
 	SpriteSheet result = SpriteSheet{
-		._renderer = renderer,
 		._width = sheetWidth,
 		._height = sheetHeight,
 		._pitch = sheetPitch,
@@ -157,7 +156,7 @@ int sprite_sheet::GetSpriteId(const SpriteSheet& sheet, int spriteX, int spriteY
 	}
 }
 
-void sprite::Draw(const SpriteSheet& sheet, int spriteId, float x, float y, float angle, SpriteFlipFlags flipFlags, float originX, float originY, float scaleX, float scaleY)
+void sprite::Draw(const DrawContext& ctx, const SpriteSheet& sheet, int spriteId, float x, float y, float angle, SpriteFlipFlags flipFlags, float originX, float originY, float scaleX, float scaleY)
 {
 	SpriteRect sourceRect = sprite_sheet::GetRect(sheet, spriteId, !!(flipFlags & SpriteFlipFlags::FlipDiag));
 	SDL_FRect destRect{
@@ -167,5 +166,5 @@ void sprite::Draw(const SpriteSheet& sheet, int spriteId, float x, float y, floa
 		static_cast<float>(sheet._spriteHeight) * scaleY
 	};
 	SDL_RendererFlip rendererFlip = ((SDL_RendererFlip)flipFlags) & (SDL_FLIP_HORIZONTAL | SDL_FLIP_VERTICAL);
-	SDL_RenderCopyExF(sheet._renderer, sheet._texture, reinterpret_cast<SDL_Rect*>(&sourceRect), &destRect, angle, nullptr, rendererFlip);
+	SDL_RenderCopyExF(ctx.renderer, sheet._texture, reinterpret_cast<SDL_Rect*>(&sourceRect), &destRect, angle, nullptr, rendererFlip);
 }

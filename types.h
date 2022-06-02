@@ -58,3 +58,10 @@ namespace camera
 {
 	inline Vec2 WorldToScreen(const Camera& camera, Vec2 world) { return world * camera.pixelsToUnit - camera.position * camera.pixelsToUnit; }
 }
+
+struct SDL_Renderer;
+
+struct DrawContext
+{
+	SDL_Renderer* renderer;
+};

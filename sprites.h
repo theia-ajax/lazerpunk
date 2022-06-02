@@ -8,7 +8,6 @@ struct SDL_Renderer;
 
 struct SpriteSheet
 {
-	SDL_Renderer* _renderer;
 	SDL_Surface* _surface;
 	SDL_Texture* _texture;
 	int _width;
@@ -49,7 +48,8 @@ namespace sprite_sheet
 
 namespace sprite
 {
-	void Draw(const SpriteSheet& sheet,
+	void Draw(const DrawContext& ctx,
+		const SpriteSheet& sheet,
 		int spriteId,
 		float x,
 		float y,

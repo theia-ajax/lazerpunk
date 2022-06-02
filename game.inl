@@ -81,9 +81,9 @@ namespace game
 		if (game.playerPos.y < game.camera.position.y + 3) game.camera.position.y = game.playerPos.y - 3;
 	}
 
-	void Render(const GameState& game, const GameTime& time)
+	void Render(const DrawContext& ctx, const GameState& game, const GameTime& time)
 	{
-		map::DrawLayers(game.map, game.camera, game.sprites, std::array{ StrId("Background") });
+		map::DrawLayers(ctx, game.map, game.camera, game.sprites, std::array{ StrId("Background") });
 
 		Vec2 screenPos = camera::WorldToScreen(game.camera, game.playerPos);
 
@@ -107,10 +107,10 @@ namespace game
 		if (game.playerFacing == Direction::Left)
 			FlagSet(flip, SpriteFlipFlags::FlipX, true);
 
-		sprite::Draw(game.sprites, spriteId, screenPos.x, screenPos.y, 0.0f, flip, 0.5f, 0.5f);
-		SDL_SetRenderDrawColor(game.sprites._renderer, 255, 0, 0, 255);
-		SDL_RenderDrawPointF(game.sprites._renderer, screenPos.x, screenPos.y);
+		sprite::Draw(ctx, game.sprites, spriteId, screenPos.x, screenPos.y, 0.0f, flip, 0.5f, 0.5f);
+		SDL_SetRenderDrawColor(ctx.renderer, 255, 0, 0, 255);
+		SDL_RenderDrawPointF(ctx.renderer, screenPos.x, screenPos.y);
 
-		map::DrawLayers(game.map, game.camera, game.sprites, std::array{ StrId("Foreground") });
+		map::DrawLayers(ctx, game.map, game.camera, game.sprites, std::array{ StrId("Foreground") });
 	}
 }

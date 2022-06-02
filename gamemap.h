@@ -92,15 +92,13 @@ namespace map
 	GameMap Load(const char* fileName);
 	void Reload(GameMap& map);
 
-
-
-	void Draw(const GameMap& map, const Camera& camera, const SpriteSheet& sheet);
-	void DrawLayers(const GameMap& map, const Camera& camera, const SpriteSheet& sheet, StrId* layerNames, size_t count);
+	void Draw(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet);
+	void DrawLayers(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet, StrId* layerNames, size_t count);
 
 	template <int N>
-	void DrawLayers(const GameMap& map, const Camera& camera, const SpriteSheet& sheet, std::array<StrId, N> layers)
+	void DrawLayers(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet, std::array<StrId, N> layers)
 	{
-		DrawLayers(map, camera, sheet, layers.data(), layers.size());
+		DrawLayers(ctx, map, camera, sheet, layers.data(), layers.size());
 	}
 
 }

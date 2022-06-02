@@ -5,14 +5,7 @@
 #include <SDL2/SDL_ttf.h>
 #include "sokol_time.h"
 #include "sprites.h"
-#include <vector>
-#include <fstream>
-#include <variant>
 #include <array>
-#include <algorithm>
-#include <rapidjson/document.h>
-#include <rapidjson/istreamwrapper.h>
-
 
 namespace input
 {
@@ -71,10 +64,9 @@ int main(int argc, char* argv[])
 	constexpr uint64_t kFixedTimeStepTicks = TicksInSecond(kFixedTimeStepSec);
 	uint64_t lastFixedUpdate = startTime;
 
-	uint64_t loadMapStart = stm_now();
 	GameMap map = map::Load("assets/testmap.tmj");
-	uint64_t loadMapTicks = stm_now() - loadMapStart;
-	printf("%0.4fms\n", stm_ms(loadMapTicks));
+
+	DrawContext drawContext{ renderer };
 
 	GameState state = {
 		.camera = gameCamera,
@@ -158,7 +150,7 @@ int main(int argc, char* argv[])
 		SDL_RenderClear(renderer);
 		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
 
-		game::Render(state, gameTime);
+		game::Render(drawContext, state, gameTime);
 
 		if (showSpriteSheet)
 		{
@@ -170,7 +162,7 @@ int main(int argc, char* argv[])
 				for (int x = 0; x < sprite_sheet::Columns(sheet); ++x)
 				{
 					int spriteId = sprite_sheet::GetSpriteId(sheet, x, y);
-					sprite::Draw(sheet, spriteId, (float)x * sheet._spriteWidth + ssvOffset.x, (float)y * sheet._spriteHeight + ssvOffset.y, 0.0, SpriteFlipFlags::None);
+					sprite::Draw(drawContext, sheet, spriteId, (float)x * sheet._spriteWidth + ssvOffset.x, (float)y * sheet._spriteHeight + ssvOffset.y, 0.0, SpriteFlipFlags::None);
 				}
 			}
 

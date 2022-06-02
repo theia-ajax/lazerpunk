@@ -290,15 +290,32 @@ void map::Reload(GameMap& map)
 
 namespace
 {
-	void DrawObjectLayer(const GameMapObjectLayer& layer, const Camera& camera, const SpriteSheet& sheet)
+	struct BlendModeGuard  // NOLINT(cppcoreguidelines-special-member-functions)
 	{
+		explicit BlendModeGuard(SDL_Renderer* renderer)  // NOLINT(cppcoreguidelines-pro-type-member-init)
+			: renderer(renderer)
+		{
+			SDL_GetRenderDrawBlendMode(renderer, &blendMode);
+		}
+
+		~BlendModeGuard()
+		{
+			SDL_SetRenderDrawBlendMode(renderer, blendMode);
+		}
+
+		SDL_Renderer* renderer;
 		SDL_BlendMode blendMode;
-		SDL_GetRenderDrawBlendMode(sheet._renderer, &blendMode);
-		//SDL_SetRenderDrawBlendMode(sheet._renderer, SDL_BLENDMODE_ADD);
+	};
+
+	void DrawObjectLayer(const DrawContext& ctx, const GameMapObjectLayer& layer, const Camera& camera, const SpriteSheet& sheet)
+	{
+		BlendModeGuard guard(ctx.renderer);
+
+		SDL_SetRenderDrawBlendMode(ctx.renderer, SDL_BLENDMODE_BLEND);
 
 		Vec2 cameraOffset = camera.position * camera.pixelsToUnit;
 
-		SDL_SetRenderDrawColor(sheet._renderer, layer.color.r, layer.color.g, layer.color.b, layer.color.a);
+		SDL_SetRenderDrawColor(ctx.renderer, layer.color.r, layer.color.g, layer.color.b, layer.color.a);
 
 		for (const auto& [nameId, typeId, objectType, objectId, tileGlobalId, position, dimensions, rotation, flipFlags, visible, polyline] : layer.objects)
 		{
@@ -310,13 +327,13 @@ namespace
 			{
 				auto [x, y] = position - cameraOffset;
 				SDL_FRect objectRect{ x, y, dimensions.x, dimensions.y };
-				SDL_RenderFillRectF(sheet._renderer, &objectRect);
+				SDL_RenderFillRectF(ctx.renderer, &objectRect);
 				break;
 			}
 			case GameMapObjectType::Tile:
 			{
 				auto [x, y] = position - cameraOffset;
-				sprite::Draw(sheet, tileGlobalId - 1, x, y, rotation, flipFlags, 0.0f, 0.0f, dimensions.x / sheet._spriteWidth, dimensions.y / sheet._spriteHeight);
+				sprite::Draw(ctx, sheet, tileGlobalId - 1, x, y, rotation, flipFlags, 0.0f, 0.0f, dimensions.x / sheet._spriteWidth, dimensions.y / sheet._spriteHeight);
 				break;
 			}
 			case GameMapObjectType::Ellipse:
@@ -324,7 +341,7 @@ namespace
 			case GameMapObjectType::Point:
 			{
 				auto [x, y] = position - cameraOffset;
-				SDL_RenderDrawPointF(sheet._renderer, x, y);
+				SDL_RenderDrawPointF(ctx.renderer, x, y);
 				break;
 			}
 			case GameMapObjectType::Polygon:
@@ -336,52 +353,50 @@ namespace
 					auto [x, y] = p + position - cameraOffset;
 					points[i++] = SDL_FPoint{ x, y };
 				}
-				SDL_RenderDrawLinesF(sheet._renderer, points.data(), static_cast<int>(points.size()));
+				SDL_RenderDrawLinesF(ctx.renderer, points.data(), static_cast<int>(points.size()));
 				break;
 			}
 			}
 		}
-
-		SDL_SetRenderDrawBlendMode(sheet._renderer, blendMode);
 	}
 
-	void DrawTileLayer(const GameMapTileLayer& layer, const Camera& camera, const SpriteSheet& sheet)
+	void DrawTileLayer(const DrawContext& ctx, const GameMapTileLayer& layer, const Camera& camera, const SpriteSheet& sheet)
 	{
 		for (const auto& [tileGlobalId, position, flipFlags] : layer.tiles)
 		{
 			auto [x, y] = camera::WorldToScreen(camera, position);
-			sprite::Draw(sheet, tileGlobalId - 1, x, y, 0.0f, flipFlags);
+			sprite::Draw(ctx, sheet, tileGlobalId - 1, x, y, 0.0f, flipFlags);
 		}
 	}
 
-	void DrawLayer(const GameMapLayer& layer, const Camera& camera, const SpriteSheet& sheet);
+	void DrawLayer(const DrawContext& ctx, const GameMapLayer& layer, const Camera& camera, const SpriteSheet& sheet);
 
-	void DrawGroupLayer(const GameMapGroupLayer& layer, const Camera& camera, const SpriteSheet& sheet)
+	void DrawGroupLayer(const DrawContext& ctx, const GameMapGroupLayer& layer, const Camera& camera, const SpriteSheet& sheet)
 	{
 		for (const auto& subLayer : layer.layers)
 		{
-			DrawLayer(subLayer, camera, sheet);
+			DrawLayer(ctx, subLayer, camera, sheet);
 		}
 	}
 
-	void DrawLayer(const GameMapLayer& layer, const Camera& camera, const SpriteSheet& sheet)
+	void DrawLayer(const DrawContext& ctx, const GameMapLayer& layer, const Camera& camera, const SpriteSheet& sheet)
 	{
-		std::visit([&camera, &sheet](auto&& layer)
+		std::visit([&ctx, &camera, &sheet](auto&& layer)
 		{
 			using T = std::decay_t<decltype(layer)>;
 			if (layer.visible)
 			{
 				if constexpr (std::is_same_v<T, GameMapTileLayer>)
 				{
-					DrawTileLayer(layer, camera, sheet);
+					DrawTileLayer(ctx, layer, camera, sheet);
 				}
 				else if constexpr (std::is_same_v<T, GameMapObjectLayer>)
 				{
-					DrawObjectLayer(layer, camera, sheet);
+					DrawObjectLayer(ctx, layer, camera, sheet);
 				}
 				else if constexpr (std::is_same_v<T, GameMapGroupLayer>)
 				{
-					DrawGroupLayer(layer, camera, sheet);
+					DrawGroupLayer(ctx, layer, camera, sheet);
 				}
 				else
 				{
@@ -393,22 +408,22 @@ namespace
 
 	constexpr StrId GetLayerNameId(GameMapLayer layer)
 	{
-		return std::visit([](auto&& layer) -> StrId
+		return std::visit([](auto&& arg) -> StrId
 			{
-				return layer.nameId;
+				return arg.nameId;
 			}, layer);
 	}
 }
 
-void map::Draw(const GameMap& map, const Camera& camera, const SpriteSheet& sheet)
+void map::Draw(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet)
 {
 	for (const auto& layer : map.layers)
 	{
-		DrawLayer(layer, camera, sheet);
+		DrawLayer(ctx, layer, camera, sheet);
 	}
 }
 
-void map::DrawLayers(const GameMap& map, const Camera& camera, const SpriteSheet& sheet, StrId* layerNames, size_t count)
+void map::DrawLayers(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet, StrId* layerNames, size_t count)
 {
 	for (const auto& layer : map.layers)
 	{
@@ -416,7 +431,7 @@ void map::DrawLayers(const GameMap& map, const Camera& camera, const SpriteSheet
 		StrId* end = layerNames + count;
 		if (auto find = std::find_if(layerNames, end, [nameId](auto&& id) {return id == nameId; }); find != end)
 		{
-			DrawLayer(layer, camera, sheet);
+			DrawLayer(ctx, layer, camera, sheet);
 		}
 	}
 }
