@@ -2,6 +2,8 @@
 
 #include <cstring>
 #include <cstdint>
+#include <algorithm>
+#include <cmath>
 #include <cassert>
 #include "enumflag.h"
 #include "stringid.h"
@@ -30,18 +32,111 @@ constexpr int mod(int a, int b)
 	return r < 0 ? r + b : r;
 }
 
+namespace math
+{
+	using std::min;
+	using std::max;
+	using std::lerp;
+	using std::expf;
+
+	constexpr float Epsilon = FLT_EPSILON * 4;
+
+	inline bool ApproxEqual(float a, float b)
+	{
+		return fabsf(a - b) <= Epsilon;
+	}
+
+	inline bool ApproxZero(float f)
+	{
+		return ApproxEqual(f, 0.0f);
+	}
+
+	inline float MoveTo(float current, float target, float rate)
+	{
+		if (current < target)
+			return min(current + rate, target);
+		else
+			return max(current - rate, target);
+	}
+
+	inline float Damp(float current, float target, float lambda, float dt)
+	{
+		return lerp(current, target, 1.0f - expf(-lambda * dt));
+	}
+}
+
 struct Vec2
 {
-	float x = 0.0f, y = 0.0f;
+	float x = 0.0f;
+	float y = 0.0f;
 };
 
 constexpr Vec2 operator+(const Vec2& a, const Vec2& b) { return Vec2{ a.x + b.x, a.y + b.y }; }
-constexpr Vec2 operator-(const Vec2& a, const Vec2& b) { return Vec2{ a.x - b.x, a.y - b.y }; }
-constexpr Vec2 operator-(const Vec2& a) { return Vec2{ -a.x, -a.y }; }
-constexpr Vec2 operator*(const Vec2& a, float b) { return Vec2{ a.x * b, a.y * b }; }
-constexpr Vec2 operator/(const Vec2& a, float b) { return Vec2{ a.x / b, a.y / b }; }
-constexpr bool operator==(const Vec2& a, const Vec2& b) { return a.x == b.x && a.y == b.y; }  // NOLINT(clang-diagnostic-float-equal)
-constexpr bool operator!=(const Vec2& a, const Vec2& b) { return !(a == b); }  // NOLINT(clang-diagnostic-float-equal)
+inline Vec2 operator-(const Vec2& a, const Vec2& b) { return Vec2{ a.x - b.x, a.y - b.y }; }
+inline Vec2 operator-(const Vec2& a) { return Vec2{ -a.x, -a.y }; }
+inline Vec2 operator*(const Vec2& a, float b) { return Vec2{ a.x * b, a.y * b }; }
+inline Vec2 operator*(const Vec2& a, const Vec2& b) { return Vec2{ a.x * b.x,a.y * b.y }; }
+inline Vec2 operator/(const Vec2& a, float b) { return Vec2{ a.x / b, a.y / b }; }
+inline bool operator==(const Vec2& a, const Vec2& b) { return a.x == b.x && a.y == b.y; }  // NOLINT(clang-diagnostic-float-equal)
+inline bool operator!=(const Vec2& a, const Vec2& b) { return !(a == b); }  // NOLINT(clang-diagnostic-float-equal)
+
+namespace vec2
+{
+	constexpr Vec2 Zero{ 0, 0 };
+	constexpr Vec2 One{ 1, 1 };
+	constexpr Vec2 Half{ 0.5f, 0.5f };
+	constexpr Vec2 UnitX{ 1, 0 };
+	constexpr Vec2 UnitY{ 0, 1 };
+
+	template<typename T>
+	constexpr Vec2 Create(T x, T y)
+	{
+		return Vec2{ static_cast<float>(x), static_cast<float>(y) };
+	}
+
+	inline Vec2 Midpoint(const Vec2& a, const Vec2& b)
+	{
+		return (a + b) / 2.0f;
+	}
+
+	inline float Length(const Vec2& v)
+	{
+		return sqrtf(v.x * v.x + v.y * v.y);
+	}
+
+	inline Vec2 Normalize(const Vec2& v)
+	{
+		float l = Length(v);
+		return (math::ApproxZero(l)) ? Zero : v / l;
+	}
+
+	inline float Dot(const Vec2& a, const Vec2& b)
+	{
+		return a.x * b.x + a.y * b.y;
+	}
+
+	inline Vec2 Lerp(const Vec2& a, const Vec2& b, float t)
+	{
+		return Vec2{ math::lerp(a.x, b.x, t), math::lerp(a.y, b.y, t) };
+	}
+
+	inline Vec2 Damp(const Vec2& a, const Vec2& b, const Vec2& lambda, float dt)
+	{
+		return Vec2{
+			math::Damp(a.x, b.x, lambda.x, dt),
+			math::Damp(a.y, b.y, lambda.y, dt),
+		};
+	}
+
+	inline Vec2 Damp(const Vec2& a, const Vec2& b, float lambda, float dt)
+	{
+		return Vec2{
+			math::Damp(a.x, b.x, lambda, dt),
+			math::Damp(a.y, b.y, lambda, dt),
+		};
+	}
+}
+
 
 struct Color
 {
@@ -62,7 +157,3 @@ namespace camera
 
 struct SDL_Renderer;
 
-struct DrawContext
-{
-	SDL_Renderer* renderer;
-};

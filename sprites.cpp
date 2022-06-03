@@ -3,9 +3,18 @@
 #include <SDL2/SDL.h>
 #include <stb_image.h>
 
+constexpr SpriteRect kInvalidRect = SpriteRect{};
+bool operator==(const SpriteRect& a, const SpriteRect& b) { return a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h; }
+bool operator!=(const SpriteRect& a, const SpriteRect& b) { return !(a == b); }
+
 uint32_t* GetSurfacePixel(const SDL_Surface* surface, int x, int y)
 {
 	return (uint32_t*)((uint8_t*)surface->pixels + (y * surface->pitch + x * surface->format->BytesPerPixel));
+}
+
+const SpriteRect& sprite_sheet::InvalidRect()
+{
+	return kInvalidRect;
 }
 
 SpriteSheet sprite_sheet::Create(SDL_Renderer* renderer, const char* fileName, int spriteWidth, int spriteHeight, int padding)
@@ -53,14 +62,15 @@ SpriteSheet sprite_sheet::Create(SDL_Renderer* renderer, const char* fileName, i
 	int spriteCols = findCount(sheetWidth, spriteWidth, padding, 0);
 
 	SpriteSheet result = SpriteSheet{
-		._width = sheetWidth,
-		._height = sheetHeight,
-		._pitch = sheetPitch,
-		._padding = padding,
-		._spriteWidth = spriteWidth,
-		._spriteHeight = spriteHeight,
-		._spriteRows = spriteRows,
-		._spriteCols = spriteCols,
+		.width = sheetWidth,
+		.height = sheetHeight,
+		.pitch = sheetPitch,
+		.padding = padding,
+		.spriteWidth = spriteWidth,
+		.spriteHeight = spriteHeight,
+		.spriteRows = spriteRows,
+		.spriteCols = spriteCols,
+		.spriteExtents = Vec2{static_cast<float>(spriteWidth), static_cast<float>(spriteHeight)},
 	};
 
 	// Copy each tile into the bottom half of the surface but rotated anti-clockwise 90 degrees.
@@ -92,8 +102,8 @@ SpriteSheet sprite_sheet::Create(SDL_Renderer* renderer, const char* fileName, i
 
 	texture = SDL_CreateTextureFromSurface(renderer, surface);
 
-	result._surface = surface;
-	result._texture = texture;
+	result.surface = surface;
+	result.texture = texture;
 
 	SDL_FreeSurface(imageSurface);
 	stbi_image_free(data);
@@ -103,15 +113,15 @@ SpriteSheet sprite_sheet::Create(SDL_Renderer* renderer, const char* fileName, i
 
 void sprite_sheet::Destroy(SpriteSheet& sheet)
 {
-	if (sheet._texture)
+	if (sheet.texture)
 	{
-		SDL_DestroyTexture(sheet._texture);
-		sheet._texture = nullptr;
+		SDL_DestroyTexture(sheet.texture);
+		sheet.texture = nullptr;
 	}
-	if (sheet._surface)
+	if (sheet.surface)
 	{
-		SDL_FreeSurface(sheet._surface);
-		sheet._surface = nullptr;
+		SDL_FreeSurface(sheet.surface);
+		sheet.surface = nullptr;
 	}
 }
 
@@ -124,22 +134,22 @@ SpriteRect sprite_sheet::GetRect(const SpriteSheet& sheet, int spriteId, bool di
 
 	spriteId = spriteId % SpriteCount(sheet);
 
-	int spriteRow = spriteId / sheet._spriteCols;
-	int spriteCol = spriteId % sheet._spriteCols;
+	int spriteRow = spriteId / sheet.spriteCols;
+	int spriteCol = spriteId % sheet.spriteCols;
 
-	int spriteX = spriteCol * sheet._spriteWidth + ((spriteCol > 0) ? sheet._padding * spriteCol : 0);
-	int spriteY = spriteRow * sheet._spriteHeight + ((spriteRow > 0) ? sheet._padding * spriteRow : 0);
+	int spriteX = spriteCol * sheet.spriteWidth + ((spriteCol > 0) ? sheet.padding * spriteCol : 0);
+	int spriteY = spriteRow * sheet.spriteHeight + ((spriteRow > 0) ? sheet.padding * spriteRow : 0);
 
 	if (diagnolFlip)
 	{
-		spriteY += sheet._height;
+		spriteY += sheet.height;
 	}
 
 	SpriteRect result = SpriteRect{
 		.x = spriteX,
 		.y = spriteY,
-		.w = sheet._spriteWidth,
-		.h = sheet._spriteHeight,
+		.w = sheet.spriteWidth,
+		.h = sheet.spriteHeight,
 	};
 	return result;
 }
@@ -154,17 +164,4 @@ int sprite_sheet::GetSpriteId(const SpriteSheet& sheet, int spriteX, int spriteY
 	{
 		return -1;
 	}
-}
-
-void sprite::Draw(const DrawContext& ctx, const SpriteSheet& sheet, int spriteId, float x, float y, float angle, SpriteFlipFlags flipFlags, float originX, float originY, float scaleX, float scaleY)
-{
-	SpriteRect sourceRect = sprite_sheet::GetRect(sheet, spriteId, !!(flipFlags & SpriteFlipFlags::FlipDiag));
-	SDL_FRect destRect{
-		x - sheet._spriteWidth * (originX * scaleX),
-		y - sheet._spriteHeight * (originY * scaleY),
-		static_cast<float>(sheet._spriteWidth) * scaleX,
-		static_cast<float>(sheet._spriteHeight) * scaleY
-	};
-	SDL_RendererFlip rendererFlip = ((SDL_RendererFlip)flipFlags) & (SDL_FLIP_HORIZONTAL | SDL_FLIP_VERTICAL);
-	SDL_RenderCopyExF(ctx.renderer, sheet._texture, reinterpret_cast<SDL_Rect*>(&sourceRect), &destRect, angle, nullptr, rendererFlip);
 }

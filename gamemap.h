@@ -38,6 +38,7 @@ enum class GameMapObjectType
 	Ellipse,
 	Point,
 	Polygon,
+	Polyline,
 	Tile,
 };
 
@@ -86,6 +87,8 @@ struct GameMap
 	StrId assetPathId;
 	std::vector<GameMapLayer> layers;
 };
+
+struct DrawContext;
 
 namespace map
 {

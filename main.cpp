@@ -4,7 +4,7 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include "sokol_time.h"
-#include "sprites.h"
+#include "draw.h"
 #include <array>
 
 namespace input
@@ -58,7 +58,6 @@ int main(int argc, char* argv[])
 
 	SpriteSheet sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);;
 
-
 	GameMap map = map::Load("assets/testmap.tmj");
 
 	DrawContext drawContext{ renderer };
@@ -73,17 +72,16 @@ int main(int argc, char* argv[])
 	Vec2 ssvOffset = {};
 	Point2I ssvSelection = {};
 
+	constexpr double kTargetFrameTime = 0.0;
+	constexpr double kFixedTimeStepSec = 1.0 / 60.0;
+
 	uint64_t startTime = stm_now();
 	uint64_t clock = startTime;
 	uint64_t lastFrameTime = clock;
-	double targetFrameTime = 0.0;
+	double timeAccumulator = 0.0;
 	double secondTimer = 1.0;
 	int frameCountThisSecond = 0;
 	int fps = 0;
-	constexpr double kFixedTimeStepSec = 1.0 / 120.0;
-	constexpr uint64_t kFixedTimeStepTicks = TicksInSecond(kFixedTimeStepSec);
-	double fixedUpdateTimer = 0.0;
-	double timeAccumulator = 0.0;
 
 	bool isRunning = true;
 	bool showSpriteSheet = false;
@@ -159,7 +157,7 @@ int main(int argc, char* argv[])
 			ssvSelection.x = clamp(ssvSelection.x, 0, sprite_sheet::Columns(sheet) - 1);
 			ssvSelection.y = clamp(ssvSelection.y, 0, sprite_sheet::Rows(sheet) - 1);
 
-			Point2I viewBase{ static_cast<int>(-ssvOffset.x / sheet._spriteWidth), static_cast<int>(-ssvOffset.y / sheet._spriteHeight) };
+			Point2I viewBase{ static_cast<int>(-ssvOffset.x / sheet.spriteWidth), static_cast<int>(-ssvOffset.y / sheet.spriteHeight) };
 
 			int maxX = (canvasX - 64) / 16 - 1;
 			int maxY = canvasY / 16 - 1;
@@ -168,39 +166,40 @@ int main(int argc, char* argv[])
 			if (ssvSelection.y - viewBase.y > maxY) viewBase.y = ssvSelection.y - maxY;
 			if (ssvSelection.y - viewBase.y < 0) viewBase.y = ssvSelection.y;
 
-			ssvOffset.x = static_cast<float>(-viewBase.x * sheet._spriteWidth);
-			ssvOffset.y = static_cast<float>(-viewBase.y * sheet._spriteHeight);
+			ssvOffset.x = static_cast<float>(-viewBase.x * sheet.spriteWidth);
+			ssvOffset.y = static_cast<float>(-viewBase.y * sheet.spriteHeight);
 		}
 
-		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-		SDL_RenderClear(renderer);
-		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+		draw::Clear(drawContext);
 
 		game::Render(drawContext, state, gameTime);
 
 		if (showSpriteSheet)
 		{
-			SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-			SDL_RenderClear(renderer);
+			draw::Clear(drawContext);
 
 			for (int y = 0; y < sprite_sheet::Rows(sheet); ++y)
 			{
 				for (int x = 0; x < sprite_sheet::Columns(sheet); ++x)
 				{
 					int spriteId = sprite_sheet::GetSpriteId(sheet, x, y);
-					sprite::Draw(drawContext, sheet, spriteId, (float)x * sheet._spriteWidth + ssvOffset.x, (float)y * sheet._spriteHeight + ssvOffset.y, 0.0, SpriteFlipFlags::None);
+					Vec2 screenPosition = vec2::Create(x, y) * sheet.spriteExtents + ssvOffset;
+					draw::Sprite(drawContext, sheet, spriteId, screenPosition, 0.0f, SpriteFlipFlags::None);
 				}
 			}
 
+			Vec2 ssvSelectionF{ static_cast<float>(ssvSelection.x), static_cast<float>(ssvSelection.y) };
 			SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-			SDL_Rect selRect{ static_cast<int>(ssvSelection.x * sheet._spriteWidth + ssvOffset.x), static_cast<int>(ssvSelection.y * sheet._spriteHeight + ssvOffset.y), sheet._spriteWidth, sheet._spriteHeight };
+			SDL_Rect selRect{ static_cast<int>(ssvSelection.x * sheet.spriteWidth + ssvOffset.x), static_cast<int>(ssvSelection.y * sheet.spriteHeight + ssvOffset.y), sheet.spriteWidth, sheet.spriteHeight };
 			SDL_RenderDrawRect(renderer, &selRect);
 
+			DrawRect selDrawRect{ ssvSelectionF * sheet.spriteExtents + ssvOffset, sheet.spriteExtents };
+			draw::Rect(drawContext, selDrawRect, Color{ 255, 255, 0, 255 });
+
 			SDL_Rect panelRect{ canvasX - 64, 0, 64, canvasY };
-			SDL_SetRenderDrawColor(renderer, 32, 32, 32, 255);
-			SDL_RenderFillRect(renderer, &panelRect);
-			SDL_SetRenderDrawColor(renderer, 192, 192, 192, 255);
-			SDL_RenderDrawRect(renderer, &panelRect);
+			DrawRect panelDrawRect = draw_rect::Create(panelRect);
+			draw::RectFill(drawContext, panelDrawRect, Color{ 32, 32, 32, 255 });
+			draw::Rect(drawContext, panelDrawRect, Color{ 192, 192, 192, 255 });
 
 			char buffer[32];
 			int selSpriteId = ssvSelection.y * sprite_sheet::Columns(sheet) + ssvSelection.x;
@@ -217,9 +216,9 @@ int main(int argc, char* argv[])
 
 		++frameCountThisSecond;
 
-		if (targetFrameTime > 0)
+		if (kTargetFrameTime > 0)
 		{
-			while (stm_sec(stm_diff(stm_now(), lastFrameTime)) < targetFrameTime) {}
+			while (stm_sec(stm_diff(stm_now(), lastFrameTime)) < kTargetFrameTime) {}
 			lastFrameTime = stm_now();
 		}
 	}

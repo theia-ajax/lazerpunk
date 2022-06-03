@@ -44,22 +44,14 @@ struct GameState
 
 namespace game
 {
+	using vec2::Length;
+	using vec2::Normalize;
+	using vec2::Dot;
+
 	void Init(GameState& game)
 	{
 		game.playerPos = { 8, 5 };
 	}
-
-	float Length(const Vec2& v) { return v.x * v.x + v.y * v.y; }
-	Vec2 Normalize(const Vec2& v)
-	{
-		float l = Length(v);
-		if (l == 0.0f)
-		{
-			return Vec2{ 0.0f, 0.0f };
-		}
-		return Vec2{ v.x / l, v.y / l };
-	}
-	float Dot(const Vec2& a, const Vec2& b) { return a.x * b.x + a.y * b.y; }
 
 	void DirectionInput(enum_array<bool, Direction>& down, enum_array<float, Direction>& timestamp, SDL_Scancode key, Direction direction, float time)
 	{
@@ -97,48 +89,24 @@ namespace game
 
 		if (input::GetKeyDown(SDL_SCANCODE_Z))
 		{
-			if (Length(game.dashVelocity) < 0.1f)
-			{
-				game.requestDash = true;
-			}
+			game.requestDash = true;
 		}
-
-		//Vec2 velocity = moveInput * time.dt() * 10.0f;
-		//game.playerPos = game.playerPos + velocity;
 
 		if (direction != Direction::Invalid)
 			game.playerFacing = direction;
 
-		//if (game.playerPos.x > game.camera.position.x + 10) game.camera.position.x = game.playerPos.x - 10;
-		//if (game.playerPos.x < game.camera.position.x + 5) game.camera.position.x = game.playerPos.x - 5;
-		//if (game.playerPos.y > game.camera.position.y + 6) game.camera.position.y = game.playerPos.y - 6;
-		//if (game.playerPos.y < game.camera.position.y + 3) game.camera.position.y = game.playerPos.y - 3;
-	}
-
-	void FixedUpdate(GameState& game, const GameTime& time)
-	{
 		if (game.requestDash)
 		{
 			game.requestDash = false;
-			if (Length(game.dashVelocity) < 2.0f)
+			if (Length(game.dashVelocity) < 0.1f)
 			{
 				game.dashVelocity = DirectionVelocity(game.playerFacing) * 25.0f;
 			}
 		}
 
-		if (Length(game.dashVelocity) > 0.0f)
-		{
-			Vec2 decay = -game.dashVelocity * game.dashDecay;
-			Vec2 newDashVelocity = game.dashVelocity + decay;
-			if (Dot(game.dashVelocity, newDashVelocity) <= 0.0f)
-			{
-				game.dashVelocity = Vec2{};
-			}
-			else
-			{
-				game.dashVelocity = newDashVelocity;
-			}
-		}
+		float dashMag = Length(game.dashVelocity);
+		float newDashMag = math::Damp(dashMag, 0.0f, 0.1f, time.dt());
+		game.dashVelocity = Normalize(game.dashVelocity) * newDashMag;
 
 		Vec2 velocity = (game.moveInput * 10.0f + game.dashVelocity) * time.dt();
 
@@ -148,6 +116,10 @@ namespace game
 		if (game.playerPos.x < game.camera.position.x + 5) game.camera.position.x = game.playerPos.x - 5;
 		if (game.playerPos.y > game.camera.position.y + 6) game.camera.position.y = game.playerPos.y - 6;
 		if (game.playerPos.y < game.camera.position.y + 3) game.camera.position.y = game.playerPos.y - 3;
+	}
+
+	void FixedUpdate(GameState& game, const GameTime& time)
+	{
 	}
 
 	void Render(const DrawContext& ctx, const GameState& game, const GameTime& time)
@@ -175,7 +147,7 @@ namespace game
 			flags::Set(flip, SpriteFlipFlags::FlipX, true);
 
 		Vec2 screenPos = camera::WorldToScreen(game.camera, game.playerPos);
-		sprite::Draw(ctx, game.sprites, spriteId, screenPos.x, screenPos.y, 0.0f, flip, 0.5f, 0.5f);
+		draw::Sprite(ctx, game.sprites, spriteId, screenPos, 0.0f, flip, Vec2{0.5f, 0.5f});
 		SDL_SetRenderDrawColor(ctx.renderer, 255, 0, 0, 255);
 		SDL_RenderDrawPointF(ctx.renderer, screenPos.x, screenPos.y);
 

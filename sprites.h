@@ -5,25 +5,26 @@
 struct SDL_Surface;
 struct SDL_Texture;
 struct SDL_Renderer;
+struct SDL_Rect;
 
 struct SpriteSheet
 {
-	SDL_Surface* _surface;
-	SDL_Texture* _texture;
-	int _width;
-	int _height;
-	int _pitch;
-	int _padding;
-	int _spriteWidth;
-	int _spriteHeight;
-	int _spriteRows;
-	int _spriteCols;
+	SDL_Surface* surface;
+	SDL_Texture* texture;
+	int width;
+	int height;
+	int pitch;
+	int padding;
+	int spriteWidth;
+	int spriteHeight;
+	int spriteRows;
+	int spriteCols;
+	Vec2 spriteExtents;
 };
 
-struct SpriteRect
-{
-	int x, y, w, h;
-};
+using SpriteRect = SDL_Rect;
+bool operator==(const SpriteRect& a, const SpriteRect& b);
+bool operator!=(const SpriteRect& a, const SpriteRect& b);
 
 enum class SpriteFlipFlags
 {
@@ -35,10 +36,12 @@ enum class SpriteFlipFlags
 
 namespace sprite_sheet
 {
-	inline bool IsValid(const SpriteSheet& sheet) { return sheet._texture != nullptr; }
-	inline int Rows(const SpriteSheet& sheet) { return sheet._spriteRows; }
-	inline int Columns(const SpriteSheet& sheet) { return sheet._spriteCols; }
+	inline bool IsValid(const SpriteSheet& sheet) { return sheet.texture != nullptr; }
+	inline int Rows(const SpriteSheet& sheet) { return sheet.spriteRows; }
+	inline int Columns(const SpriteSheet& sheet) { return sheet.spriteCols; }
 	inline int SpriteCount(const SpriteSheet& sheet) { return Rows(sheet) * Columns(sheet); }
+
+	const SpriteRect& InvalidRect();
 
 	SpriteSheet Create(SDL_Renderer* renderer, const char* fileName, int spriteWidth, int spriteHeight, int padding);
 	void Destroy(SpriteSheet& sheet);
@@ -46,17 +49,3 @@ namespace sprite_sheet
 	int GetSpriteId(const SpriteSheet& sheet, int spriteX, int spriteY);
 }
 
-namespace sprite
-{
-	void Draw(const DrawContext& ctx,
-		const SpriteSheet& sheet,
-		int spriteId,
-		float x,
-		float y,
-		float angle = 0.0f,
-		SpriteFlipFlags flipFlags = SpriteFlipFlags::None,
-		float originX = 0.0f,
-		float originY = 0.0f,
-		float scaleX = 1.0f,
-		float scaleY = 1.0f);
-}

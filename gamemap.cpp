@@ -1,10 +1,12 @@
 #include "gamemap.h"
+#include "draw.h"
 #include <algorithm>
 #include <array>
 #include <fstream>
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <SDL2/SDL.h>
+
 
 namespace
 {
@@ -141,7 +143,6 @@ namespace
 			result.color = Color{ red, blue, green, alpha };
 		}
 
-
 		auto objectArray = jsonLayer["objects"].GetArray();
 		result.objects.resize(objectArray.Capacity());
 
@@ -160,7 +161,8 @@ namespace
 			bool isPoint = obj.HasMember("point") && obj["point"].GetBool();
 			bool isEllipse = obj.HasMember("ellipse") && obj["ellipse"].GetBool();
 			bool isTile = obj.HasMember("gid");
-			bool isPolygon = obj.HasMember("polyline") && obj["polyline"].IsArray();
+			bool isPolyline = obj.HasMember("polyline") && obj["polyline"].IsArray();
+			bool isPolygon = obj.HasMember("polygon") && obj["polygon"].IsArray();
 			int64_t gid = (isTile) ? obj["gid"].GetInt64() : 0;
 
 			GameMapObjectType objectType = GameMapObjectType::Quad;
@@ -168,6 +170,7 @@ namespace
 			else if (isEllipse) objectType = GameMapObjectType::Ellipse;
 			else if (isTile) objectType = GameMapObjectType::Tile;
 			else if (isPolygon) objectType = GameMapObjectType::Polygon;
+			else if (isPolyline) objectType = GameMapObjectType::Polyline;
 
 			int tileGlobalId;
 			SpriteFlipFlags flipFlags;
@@ -186,11 +189,13 @@ namespace
 				visible,
 			};
 
-			if (isPolygon)
+			if (isPolygon || isPolyline)
 			{
-				for (rapidjson::SizeType j = 0; j < obj["polyline"].Capacity(); ++j)
+				const auto& pointsArray = isPolyline ? obj["polyline"] : obj["polygon"];
+
+				for (rapidjson::SizeType j = 0; j < pointsArray.Capacity(); ++j)
 				{
-					const auto& pointObj = obj["polyline"][j];
+					const auto& pointObj = pointsArray[j];
 
 					ASSERT(pointObj.IsObject());
 					ASSERT(pointObj.HasMember("x"));
@@ -202,6 +207,11 @@ namespace
 					};
 
 					object.polyline.push_back(point);
+				}
+
+				if (isPolygon)
+				{
+					object.polyline.push_back(Vec2{});
 				}
 			}
 
@@ -315,7 +325,7 @@ namespace
 
 		Vec2 cameraOffset = camera.position * camera.pixelsToUnit;
 
-		SDL_SetRenderDrawColor(ctx.renderer, layer.color.r, layer.color.g, layer.color.b, layer.color.a);
+		draw::SetColor(ctx, layer.color);
 
 		for (const auto& [nameId, typeId, objectType, objectId, tileGlobalId, position, dimensions, rotation, flipFlags, visible, polyline] : layer.objects)
 		{
@@ -324,36 +334,26 @@ namespace
 			switch (objectType)
 			{
 			case GameMapObjectType::Quad:
-			{
-				auto [x, y] = position - cameraOffset;
-				SDL_FRect objectRect{ x, y, dimensions.x, dimensions.y };
-				SDL_RenderFillRectF(ctx.renderer, &objectRect);
+				draw::RectFill(ctx, DrawRect{ position - cameraOffset, dimensions });
 				break;
-			}
 			case GameMapObjectType::Tile:
-			{
-				auto [x, y] = position - cameraOffset;
-				sprite::Draw(ctx, sheet, tileGlobalId - 1, x, y, rotation, flipFlags, 0.0f, 0.0f, dimensions.x / sheet._spriteWidth, dimensions.y / sheet._spriteHeight);
+				draw::Sprite(ctx, sheet, tileGlobalId - 1, position - cameraOffset, rotation, flipFlags, Vec2{ 0.0f, 0.0f }, dimensions * sheet.spriteExtents);
 				break;
-			}
 			case GameMapObjectType::Ellipse:
 				break;
 			case GameMapObjectType::Point:
-			{
-				auto [x, y] = position - cameraOffset;
-				SDL_RenderDrawPointF(ctx.renderer, x, y);
+				draw::Point(ctx, position - cameraOffset);
 				break;
-			}
+			case GameMapObjectType::Polyline:
 			case GameMapObjectType::Polygon:
 			{
-				std::vector<SDL_FPoint> points(polyline.size());
+				std::vector<Vec2> points(polyline.size());
 				size_t i = 0;
 				for (auto p : polyline)
 				{
-					auto [x, y] = p + position - cameraOffset;
-					points[i++] = SDL_FPoint{ x, y };
+					points[i++] = p + position - cameraOffset;
 				}
-				SDL_RenderDrawLinesF(ctx.renderer, points.data(), static_cast<int>(points.size()));
+				draw::Lines(ctx, points.data(), points.size());
 				break;
 			}
 			}
@@ -364,8 +364,8 @@ namespace
 	{
 		for (const auto& [tileGlobalId, position, flipFlags] : layer.tiles)
 		{
-			auto [x, y] = camera::WorldToScreen(camera, position);
-			sprite::Draw(ctx, sheet, tileGlobalId - 1, x, y, 0.0f, flipFlags);
+			Vec2 screenPosition = camera::WorldToScreen(camera, position);
+			draw::Sprite(ctx, sheet, tileGlobalId - 1, screenPosition, 0.0f, flipFlags);
 		}
 	}
 
@@ -392,7 +392,7 @@ namespace
 				}
 				else if constexpr (std::is_same_v<T, GameMapObjectLayer>)
 				{
-					//DrawObjectLayer(ctx, layer, camera, sheet);
+					DrawObjectLayer(ctx, layer, camera, sheet);
 				}
 				else if constexpr (std::is_same_v<T, GameMapGroupLayer>)
 				{
