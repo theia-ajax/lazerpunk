@@ -54,6 +54,9 @@
     <ClInclude Include="draw.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="ecs.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\spritesheet.tsj">

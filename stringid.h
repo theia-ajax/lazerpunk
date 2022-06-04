@@ -42,3 +42,13 @@ inline constexpr StrId StrId::kEmpty{ kEmptyRaw };
 
 inline bool operator==(const StrId& a, const StrId& b) { return a.RawValue() == b.RawValue(); }
 inline bool operator!=(const StrId& a, const StrId& b) { return a.RawValue() != b.RawValue(); }
+inline bool operator<(const StrId& a, const StrId& b) { return a.RawValue() < b.RawValue(); }
+
+template <>
+struct std::hash<StrId>
+{
+	std::size_t operator()(const StrId& s) const noexcept
+	{
+		return std::hash<StrId::RawType>{}(s.RawValue());
+	}
+};

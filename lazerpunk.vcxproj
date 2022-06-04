@@ -164,6 +164,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="draw.h" />
+    <ClInclude Include="ecs.h" />
     <ClInclude Include="enumflag.h" />
     <ClInclude Include="game.inl" />
     <ClInclude Include="gamemap.h" />

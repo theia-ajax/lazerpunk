@@ -5,6 +5,7 @@
 #include <SDL2/SDL_ttf.h>
 #include "sokol_time.h"
 #include "draw.h"
+#include "ecs.h"
 #include <array>
 
 namespace input
@@ -39,11 +40,129 @@ private:
 };
 #include "game.inl"
 
+World world;
+
+struct GatherInputSystem : System
+{
+	void Update(const GameTime& time) const
+	{
+		for (Entity entity : entities)
+		{
+			auto& gather = GetWorld().GetComponent<GameInputGather>(entity);
+			auto& gameInput = GetWorld().GetComponent<GameInput>(entity);
+
+			DirectionInput(gather.moveDown, gather.moveDownTimestamp, SDL_SCANCODE_LEFT, Direction::Left, time.t());
+			DirectionInput(gather.moveDown, gather.moveDownTimestamp, SDL_SCANCODE_RIGHT, Direction::Right, time.t());
+			DirectionInput(gather.moveDown, gather.moveDownTimestamp, SDL_SCANCODE_UP, Direction::Up, time.t());
+			DirectionInput(gather.moveDown, gather.moveDownTimestamp, SDL_SCANCODE_DOWN, Direction::Down, time.t());
+
+
+			Direction direction = Direction::Invalid;
+			float latestTime = 0.0f;
+			for (Direction dir = Direction::Left; dir < Direction::Count; ++dir)
+			{
+				if (gather.moveDown[dir] && gather.moveDownTimestamp[dir] > latestTime)
+				{
+					direction = dir;
+					latestTime = gather.moveDownTimestamp[dir];
+				}
+			}
+
+			gameInput.moveInput = DirectionVelocity(direction);
+			gameInput.direction = direction;
+
+			if (input::GetKeyDown(SDL_SCANCODE_Z))
+			{
+				gameInput.requestDash = true;
+			}
+		}
+	}
+
+private:
+	static Vec2 DirectionVelocity(Direction direction)
+	{
+		Vec2 moveVectors[kDirectionCount] = {
+			{0, 0}, {-1, 0}, {1, 0}, {0, -1}, {0, 1}
+		};
+		return moveVectors[static_cast<int>(direction)];
+	}
+
+	static void DirectionInput(enum_array<bool, Direction>& down, enum_array<float, Direction>& timestamp, SDL_Scancode key, Direction direction, float time)
+	{
+		down[direction] = input::GetKey(key);
+		if (input::GetKeyDown(key)) timestamp[direction] = time;
+	}
+};
+
+struct PlayerControlSystem : System
+{
+	void Update(const GameTime& time) const
+	{
+		for (Entity entity : entities)
+		{
+			const auto& input = GetWorld().GetComponent<GameInput>(entity);
+			auto& transform = GetWorld().GetComponent<Transform>(entity);
+			auto& [facing] = GetWorld().GetComponent<Facing>(entity);
+			auto& [velocity] = GetWorld().GetComponent<Velocity>(entity);
+
+			if (input.direction != Direction::Invalid)
+				facing = input.direction;
+			velocity = (input.moveInput * 10.0f);
+		}
+	}
+};
+
+struct SpriteFacingSystem : System
+{
+	void Update() const
+	{
+		for (Entity entity : entities)
+		{
+			const auto& [facing] = GetWorld().GetComponent<Facing>(entity);
+			const auto& facingSprites = GetWorld().GetComponent<FacingSprites>(entity);
+			auto& sprite = GetWorld().GetComponent<Sprite>(entity);
+
+
+			switch (facing)
+			{
+			default: break;
+			case Direction::Left:
+				flags::Set(sprite.flipFlags, SpriteFlipFlags::FlipX, true);
+				sprite.spriteId = facingSprites.sideId;
+				break;
+			case Direction::Right:
+				flags::Set(sprite.flipFlags, SpriteFlipFlags::FlipX, false);
+				sprite.spriteId = facingSprites.sideId;
+				break;
+			case Direction::Up:
+				sprite.spriteId = facingSprites.upId;
+				break;
+			case Direction::Down:
+				sprite.spriteId = facingSprites.downId;
+				break;
+			}
+
+		}
+	}
+};
+
+struct MoverSystem : System
+{
+	void Update(const GameTime& time) const
+	{
+		for (Entity entity : entities)
+		{
+			auto& transform = GetWorld().GetComponent<Transform>(entity);
+			auto& [velocity] = GetWorld().GetComponent<Velocity>(entity);
+			transform.position = transform.position + velocity * time.dt();
+		}
+	}
+};
+
 int main(int argc, char* argv[])
 {
 	stm_setup();
 	TTF_Init();
-
 	TTF_Font* debugFont = TTF_OpenFont("assets/PressStart2P-Regular.ttf", 8);
 
 	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, 0);
@@ -57,7 +176,6 @@ int main(int argc, char* argv[])
 	gameCamera.extents.y = static_cast<float>(canvasY);
 
 	SpriteSheet sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);;
-
 	GameMap map = map::Load("assets/testmap.tmj");
 
 	DrawContext drawContext{ renderer };
@@ -68,6 +186,28 @@ int main(int argc, char* argv[])
 		.map = map,
 	};
 	game::Init(state);
+
+	world.RegisterComponent<Transform>();
+	world.RegisterComponent<GameInput>();
+	world.RegisterComponent<GameInputGather>();
+	world.RegisterComponent<Facing>();
+	world.RegisterComponent<FacingSprites>();
+	world.RegisterComponent<Velocity>();
+	world.RegisterComponent<Sprite>();
+
+	auto gatherInputSystem = world.RegisterSystem<GatherInputSystem, GameInputGather, GameInput>();
+	auto playerControlSystem = world.RegisterSystem<PlayerControlSystem, GameInput, Transform, Facing, Velocity>();
+	auto spriteFacingSystem = world.RegisterSystem<SpriteFacingSystem, Facing, FacingSprites, Sprite>();
+	auto moverSystem = world.RegisterSystem<MoverSystem, Transform, Velocity>();
+
+	Entity playerEntity = world.CreateEntity();
+	world.AddComponent(playerEntity, Transform{{8, 5}});
+	world.AddComponent(playerEntity, GameInput{});
+	world.AddComponent(playerEntity, GameInputGather{});
+	world.AddComponent(playerEntity, Facing{ Direction::Right });
+	world.AddComponent(playerEntity, Velocity{});
+	world.AddComponent(playerEntity, FacingSprites{ 1043, 1042, 1041 });
+	world.AddComponent(playerEntity, Sprite{});
 
 	Vec2 ssvOffset = {};
 	Point2I ssvSelection = {};
@@ -140,6 +280,11 @@ int main(int argc, char* argv[])
 		GameTime gameTime(elapsedSec, deltaSec);
 		game::Update(state, gameTime);
 
+		gatherInputSystem->Update(gameTime);
+		playerControlSystem->Update(gameTime);
+		spriteFacingSystem->Update();
+		moverSystem->Update(gameTime);
+
 		timeAccumulator += deltaSec;
 		while (timeAccumulator >= kFixedTimeStepSec)
 		{
@@ -172,7 +317,16 @@ int main(int argc, char* argv[])
 
 		draw::Clear(drawContext);
 
-		game::Render(drawContext, state, gameTime);
+		//game::Render(drawContext, state, gameTime);
+
+		{
+			const auto& playerTx = world.GetComponent<Transform>(playerEntity);
+			const auto& sprite = world.GetComponent<Sprite>(playerEntity);
+			Vec2 screenPos = camera::WorldToScreen(state.camera, playerTx.position);
+			draw::Point(drawContext, screenPos, { 255, 0, 0, 255 });
+			draw::Sprite(drawContext, sheet, sprite.spriteId, screenPos, playerTx.rotation, sprite.flipFlags, vec2::Half);
+		}
+
 
 		if (showSpriteSheet)
 		{

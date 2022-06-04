@@ -22,8 +22,16 @@ enum class Direction
 
 constexpr int kDirectionCount = static_cast<int>(Direction::Count);
 
+enum class EntityFlags
+{
+	None,
+};
 
-
+struct GameEntity
+{
+	Vec2 position;
+	float rotation;
+};
 
 struct GameState
 {
@@ -39,7 +47,52 @@ struct GameState
 	Vec2 moveInput{};
 	bool requestDash{};
 	Vec2 dashVelocity{};
-	float dashDecay{ 0.05f };
+	float dashDecay{ 5.0f };
+	float dashThreshold{ 0.1f };
+};
+
+
+struct Transform
+{
+	Vec2 position = vec2::Zero;
+	Vec2 scale = vec2::One;
+	float rotation = 0.0f;
+};
+
+struct GameInputGather
+{
+	enum_array<bool, Direction> moveDown{};
+	enum_array<float, Direction> moveDownTimestamp{};
+};
+
+struct GameInput
+{
+	Direction direction{};
+	Vec2 moveInput{};
+	bool requestDash{};
+};
+
+struct Facing
+{
+	Direction facing{};
+};
+
+struct Velocity
+{
+	Vec2 velocity{};
+};
+
+struct FacingSprites
+{
+	int sideId{};
+	int upId{};
+	int downId{};
+};
+
+struct Sprite
+{
+	int spriteId{};
+	SpriteFlipFlags flipFlags{};
 };
 
 namespace game
@@ -105,8 +158,14 @@ namespace game
 		}
 
 		float dashMag = Length(game.dashVelocity);
-		float newDashMag = math::Damp(dashMag, 0.0f, 0.1f, time.dt());
-		game.dashVelocity = Normalize(game.dashVelocity) * newDashMag;
+		if (float newDashMag = math::Damp(dashMag, 0.0f, 5.0f, time.dt()); newDashMag < game.dashThreshold)
+		{
+			game.dashVelocity = vec2::Zero;
+		}
+		else
+		{
+			game.dashVelocity = Normalize(game.dashVelocity) * newDashMag;
+		}
 
 		Vec2 velocity = (game.moveInput * 10.0f + game.dashVelocity) * time.dt();
 
