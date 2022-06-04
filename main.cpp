@@ -18,16 +18,10 @@ namespace input
 	bool GetKeyRepeat(SDL_Scancode key);
 }
 
-struct Point2I
-{
-	int x = 0, y = 0;
-};
+template <typename T>
+constexpr T clamp(T v, T min, T max) { return (v < min) ? min : ((v > max) ? max : v); }
 
-inline int clamp(int v, int min, int max) { return (v < min) ? min : ((v > max) ? max : v); }
 
-constexpr uint64_t TicksInSecond(double sec) {
-	return (uint64_t)(sec * 1000000000.0);
-}
 
 struct GameTime
 {
@@ -41,123 +35,6 @@ private:
 #include "game.inl"
 
 World world;
-
-struct GatherInputSystem : System
-{
-	void Update(const GameTime& time) const
-	{
-		for (Entity entity : entities)
-		{
-			auto& gather = GetWorld().GetComponent<GameInputGather>(entity);
-			auto& gameInput = GetWorld().GetComponent<GameInput>(entity);
-
-			DirectionInput(gather.moveDown, gather.moveDownTimestamp, SDL_SCANCODE_LEFT, Direction::Left, time.t());
-			DirectionInput(gather.moveDown, gather.moveDownTimestamp, SDL_SCANCODE_RIGHT, Direction::Right, time.t());
-			DirectionInput(gather.moveDown, gather.moveDownTimestamp, SDL_SCANCODE_UP, Direction::Up, time.t());
-			DirectionInput(gather.moveDown, gather.moveDownTimestamp, SDL_SCANCODE_DOWN, Direction::Down, time.t());
-
-
-			Direction direction = Direction::Invalid;
-			float latestTime = 0.0f;
-			for (Direction dir = Direction::Left; dir < Direction::Count; ++dir)
-			{
-				if (gather.moveDown[dir] && gather.moveDownTimestamp[dir] > latestTime)
-				{
-					direction = dir;
-					latestTime = gather.moveDownTimestamp[dir];
-				}
-			}
-
-			gameInput.moveInput = DirectionVelocity(direction);
-			gameInput.direction = direction;
-
-			if (input::GetKeyDown(SDL_SCANCODE_Z))
-			{
-				gameInput.requestDash = true;
-			}
-		}
-	}
-
-private:
-	static Vec2 DirectionVelocity(Direction direction)
-	{
-		Vec2 moveVectors[kDirectionCount] = {
-			{0, 0}, {-1, 0}, {1, 0}, {0, -1}, {0, 1}
-		};
-		return moveVectors[static_cast<int>(direction)];
-	}
-
-	static void DirectionInput(enum_array<bool, Direction>& down, enum_array<float, Direction>& timestamp, SDL_Scancode key, Direction direction, float time)
-	{
-		down[direction] = input::GetKey(key);
-		if (input::GetKeyDown(key)) timestamp[direction] = time;
-	}
-};
-
-struct PlayerControlSystem : System
-{
-	void Update(const GameTime& time) const
-	{
-		for (Entity entity : entities)
-		{
-			const auto& input = GetWorld().GetComponent<GameInput>(entity);
-			auto& transform = GetWorld().GetComponent<Transform>(entity);
-			auto& [facing] = GetWorld().GetComponent<Facing>(entity);
-			auto& [velocity] = GetWorld().GetComponent<Velocity>(entity);
-
-			if (input.direction != Direction::Invalid)
-				facing = input.direction;
-			velocity = (input.moveInput * 10.0f);
-		}
-	}
-};
-
-struct SpriteFacingSystem : System
-{
-	void Update() const
-	{
-		for (Entity entity : entities)
-		{
-			const auto& [facing] = GetWorld().GetComponent<Facing>(entity);
-			const auto& facingSprites = GetWorld().GetComponent<FacingSprites>(entity);
-			auto& sprite = GetWorld().GetComponent<Sprite>(entity);
-
-
-			switch (facing)
-			{
-			default: break;
-			case Direction::Left:
-				flags::Set(sprite.flipFlags, SpriteFlipFlags::FlipX, true);
-				sprite.spriteId = facingSprites.sideId;
-				break;
-			case Direction::Right:
-				flags::Set(sprite.flipFlags, SpriteFlipFlags::FlipX, false);
-				sprite.spriteId = facingSprites.sideId;
-				break;
-			case Direction::Up:
-				sprite.spriteId = facingSprites.upId;
-				break;
-			case Direction::Down:
-				sprite.spriteId = facingSprites.downId;
-				break;
-			}
-
-		}
-	}
-};
-
-struct MoverSystem : System
-{
-	void Update(const GameTime& time) const
-	{
-		for (Entity entity : entities)
-		{
-			auto& transform = GetWorld().GetComponent<Transform>(entity);
-			auto& [velocity] = GetWorld().GetComponent<Velocity>(entity);
-			transform.position = transform.position + velocity * time.dt();
-		}
-	}
-};
 
 int main(int argc, char* argv[])
 {
@@ -201,16 +78,25 @@ int main(int argc, char* argv[])
 	auto moverSystem = world.RegisterSystem<MoverSystem, Transform, Velocity>();
 
 	Entity playerEntity = world.CreateEntity();
-	world.AddComponent(playerEntity, Transform{{8, 5}});
-	world.AddComponent(playerEntity, GameInput{});
-	world.AddComponent(playerEntity, GameInputGather{});
-	world.AddComponent(playerEntity, Facing{ Direction::Right });
-	world.AddComponent(playerEntity, Velocity{});
-	world.AddComponent(playerEntity, FacingSprites{ 1043, 1042, 1041 });
-	world.AddComponent(playerEntity, Sprite{});
+	world.AddComponents(playerEntity,
+		Transform{ {8, 5} },
+		GameInput{},
+		GameInputGather{},
+		Facing{ Direction::Right },
+		Velocity{},
+		FacingSprites{ 1043, 1042, 1041 },
+		Sprite{});
+
+	//world.AddComponent(playerEntity, Transform{{8, 5}});
+	//world.AddComponent(playerEntity, GameInput{});
+	//world.AddComponent(playerEntity, GameInputGather{});
+	//world.AddComponent(playerEntity, Facing{ Direction::Right });
+	//world.AddComponent(playerEntity, Velocity{});
+	//world.AddComponent(playerEntity, FacingSprites{ 1043, 1042, 1041 });
+	//world.AddComponent(playerEntity, Sprite{});
 
 	Vec2 ssvOffset = {};
-	Point2I ssvSelection = {};
+	SDL_Point ssvSelection = {};
 
 	constexpr double kTargetFrameTime = 0.0;
 	constexpr double kFixedTimeStepSec = 1.0 / 60.0;
@@ -302,7 +188,7 @@ int main(int argc, char* argv[])
 			ssvSelection.x = clamp(ssvSelection.x, 0, sprite_sheet::Columns(sheet) - 1);
 			ssvSelection.y = clamp(ssvSelection.y, 0, sprite_sheet::Rows(sheet) - 1);
 
-			Point2I viewBase{ static_cast<int>(-ssvOffset.x / sheet.spriteWidth), static_cast<int>(-ssvOffset.y / sheet.spriteHeight) };
+			SDL_Point viewBase{ static_cast<int>(-ssvOffset.x / sheet.spriteWidth), static_cast<int>(-ssvOffset.y / sheet.spriteHeight) };
 
 			int maxX = (canvasX - 64) / 16 - 1;
 			int maxY = canvasY / 16 - 1;

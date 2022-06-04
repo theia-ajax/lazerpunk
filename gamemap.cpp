@@ -41,7 +41,7 @@ namespace
 			((data & 0x20000000) ? SpriteFlipFlags::FlipDiag : SpriteFlipFlags::None);
 	}
 
-	GameMapTileLayer ParseTileLayer(const rapidjson::Document::ValueType& jsonLayer)
+	GameMapTileLayer ParseTileLayer(const rapidjson::Document& doc, const rapidjson::Document::ValueType& jsonLayer)
 	{
 		GameMapLayerCommon common = ParseLayerCommonData(jsonLayer);
 
@@ -78,7 +78,7 @@ namespace
 		return result;
 	}
 
-	GameMapObjectLayer ParseObjectLayer(const rapidjson::Document::ValueType& jsonLayer)
+	GameMapObjectLayer ParseObjectLayer(const rapidjson::Document& doc, const rapidjson::Document::ValueType& jsonLayer)
 	{
 		GameMapLayerCommon common = ParseLayerCommonData(jsonLayer);
 
@@ -86,6 +86,10 @@ namespace
 		ASSERT(jsonLayer["objects"].IsArray());
 		ASSERT(jsonLayer.HasMember("visible"));
 		ASSERT(jsonLayer.HasMember("draworder"));
+
+		float tileWidth = doc["tilewidth"].GetFloat();
+		float tileHeight = doc["tileheight"].GetFloat();
+		Vec2 tileExtents{ tileWidth, tileHeight };
 
 		GameMapObjectLayer result{ common };
 
@@ -165,6 +169,9 @@ namespace
 			bool isPolygon = obj.HasMember("polygon") && obj["polygon"].IsArray();
 			int64_t gid = (isTile) ? obj["gid"].GetInt64() : 0;
 
+			Vec2 worldPos = Vec2{ posX, posY } / tileExtents;
+			Vec2 worldDim = Vec2{ width, height } / tileExtents;
+
 			GameMapObjectType objectType = GameMapObjectType::Quad;
 			if (isPoint) objectType = GameMapObjectType::Point;
 			else if (isEllipse) objectType = GameMapObjectType::Ellipse;
@@ -182,8 +189,8 @@ namespace
 				objectType,
 				objectId,
 				tileGlobalId,
-				Vec2{posX, posY},
-				Vec2{width, height},
+				worldPos,
+				worldDim,
 				rotation,
 				flipFlags,
 				visible,
@@ -206,7 +213,7 @@ namespace
 						pointObj["y"].GetFloat(),
 					};
 
-					object.polyline.push_back(point);
+					object.polyline.push_back(point / tileExtents);
 				}
 
 				if (isPolygon)
@@ -221,9 +228,9 @@ namespace
 		return result;
 	}
 
-	GameMapLayer ParseLayer(const rapidjson::Document::ValueType& jsonLayer);
+	GameMapLayer ParseLayer(const rapidjson::Document& doc, const rapidjson::Document::ValueType& jsonLayer);
 
-	GameMapGroupLayer ParseGroupLayer(const rapidjson::Document::ValueType& jsonLayer)
+	GameMapGroupLayer ParseGroupLayer(const rapidjson::Document& doc, const rapidjson::Document::ValueType& jsonLayer)
 	{
 		GameMapLayerCommon common = ParseLayerCommonData(jsonLayer);
 
@@ -237,13 +244,13 @@ namespace
 
 		for (rapidjson::SizeType i = 0; i < layerArray.Capacity(); ++i)
 		{
-			result.layers[i] = ParseLayer(layerArray[i]);
+			result.layers[i] = ParseLayer(doc, layerArray[i]);
 		}
 
 		return result;
 	}
 
-	GameMapLayer ParseLayer(const rapidjson::Document::ValueType& jsonLayer)
+	GameMapLayer ParseLayer(const rapidjson::Document& doc, const rapidjson::Document::ValueType& jsonLayer)
 	{
 		ASSERT(jsonLayer.HasMember("type"));
 		ASSERT(jsonLayer["type"].IsString());
@@ -254,15 +261,15 @@ namespace
 
 		if (typeId == kLayerTypeTile)
 		{
-			result = ParseTileLayer(jsonLayer);
+			result = ParseTileLayer(doc, jsonLayer);
 		}
 		else if (typeId == kLayerTypeObject)
 		{
-			result = ParseObjectLayer(jsonLayer);
+			result = ParseObjectLayer(doc, jsonLayer);
 		}
 		else if (typeId == kLayerTypeGroup)
 		{
-			result = ParseGroupLayer(jsonLayer);
+			result = ParseGroupLayer(doc, jsonLayer);
 		}
 
 		return result;
@@ -286,7 +293,7 @@ GameMap map::Load(const char* fileName)
 
 	for (rapidjson::SizeType i = 0; i < doc["layers"].Capacity(); ++i)
 	{
-		GameMapLayer layer = ParseLayer(doc["layers"][i]);
+		GameMapLayer layer = ParseLayer(doc, doc["layers"][i]);
 		result.layers.push_back(layer);
 	}
 
@@ -323,7 +330,7 @@ namespace
 
 		SDL_SetRenderDrawBlendMode(ctx.renderer, SDL_BLENDMODE_BLEND);
 
-		Vec2 cameraOffset = camera.position * camera.pixelsToUnit;
+		Vec2 cameraOffset = camera.position * camera.scale;
 
 		draw::SetColor(ctx, layer.color);
 
@@ -331,18 +338,21 @@ namespace
 		{
 			if (!visible) continue;
 
+			Vec2 screenPos = camera::WorldToScreen(camera, position);
+			Vec2 screenDim = camera::WorldToScreenScale(camera, dimensions);
+
 			switch (objectType)
 			{
 			case GameMapObjectType::Quad:
-				draw::RectFill(ctx, DrawRect{ position - cameraOffset, dimensions });
+				draw::RectFill(ctx, DrawRect{ screenPos, screenDim });
 				break;
 			case GameMapObjectType::Tile:
-				draw::Sprite(ctx, sheet, tileGlobalId - 1, position - cameraOffset, rotation, flipFlags, Vec2{ 0.0f, 0.0f }, dimensions * sheet.spriteExtents);
+				draw::Sprite(ctx, sheet, tileGlobalId - 1, screenPos, rotation, flipFlags, Vec2{ 0.0f, 0.0f }, screenDim * sheet.spriteExtents);
 				break;
 			case GameMapObjectType::Ellipse:
 				break;
 			case GameMapObjectType::Point:
-				draw::Point(ctx, position - cameraOffset);
+				draw::Point(ctx, screenPos);
 				break;
 			case GameMapObjectType::Polyline:
 			case GameMapObjectType::Polygon:
@@ -351,7 +361,7 @@ namespace
 				size_t i = 0;
 				for (auto p : polyline)
 				{
-					points[i++] = p + position - cameraOffset;
+					points[i++] = camera::WorldToScreen(camera, p + position);
 				}
 				draw::Lines(ctx, points.data(), points.size());
 				break;

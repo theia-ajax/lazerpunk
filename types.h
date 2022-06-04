@@ -77,6 +77,7 @@ inline Vec2 operator-(const Vec2& a) { return Vec2{ -a.x, -a.y }; }
 inline Vec2 operator*(const Vec2& a, float b) { return Vec2{ a.x * b, a.y * b }; }
 inline Vec2 operator*(const Vec2& a, const Vec2& b) { return Vec2{ a.x * b.x,a.y * b.y }; }
 inline Vec2 operator/(const Vec2& a, float b) { return Vec2{ a.x / b, a.y / b }; }
+inline Vec2 operator/(const Vec2& a, const Vec2& b) { return Vec2{ a.x / b.x, a.y / b.y }; }
 inline bool operator==(const Vec2& a, const Vec2& b) { return a.x == b.x && a.y == b.y; }  // NOLINT(clang-diagnostic-float-equal)
 inline bool operator!=(const Vec2& a, const Vec2& b) { return !(a == b); }  // NOLINT(clang-diagnostic-float-equal)
 
@@ -143,17 +144,17 @@ struct Color
 	uint8_t r, g, b, a;
 };
 
+struct SDL_Renderer;
+
 struct Camera
 {
 	Vec2 position;
 	Vec2 extents;
-	float pixelsToUnit = 16.0f;
+	float scale = 16.0f;
 };
 
 namespace camera
 {
-	inline Vec2 WorldToScreen(const Camera& camera, Vec2 world) { return world * camera.pixelsToUnit - camera.position * camera.pixelsToUnit; }
+	inline Vec2 WorldToScreenScale(const Camera& camera, Vec2 world) { return world * camera.scale; }
+	inline Vec2 WorldToScreen(const Camera& camera, Vec2 world) { return world * camera.scale - camera.position * camera.scale; }
 }
-
-struct SDL_Renderer;
-

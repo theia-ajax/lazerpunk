@@ -1,5 +1,9 @@
 #pragma once
 
+// Adapted from the example provided on this blog post
+// https://austinmorlan.com/posts/entity_component_system
+
+
 #include "types.h"
 #include <bitset>
 #include <queue>
@@ -15,10 +19,10 @@ constexpr Entity kMaxEntities = 4096;
 using ComponentType = uint8_t;
 constexpr ComponentType kMaxComponents = 64;
 
+// Signatures represent which 
 using Signature = std::bitset<kMaxComponents>;
 
-
-
+// Tracks available entity indices and signatures of active entities
 class EntityManager
 {
 public:
@@ -36,6 +40,17 @@ public:
 		availableEntities.pop();
 
 		return id;
+	}
+
+	template <int N>
+	std::array<Entity, N> CreateEntities()
+	{
+		std::array<Entity, N> entities;
+		for (int i = 0; i < N; ++i)
+		{
+			entities[i] = CreateEntity();
+		}
+		return entities;
 	}
 
 	void DestroyEntity(Entity entity)
@@ -73,7 +88,7 @@ public:
 };
 
 template <typename T>
-class ComponentArray : public IComponentArray
+class ComponentArray final : public IComponentArray
 {
 public:
 	T& Insert(Entity entity, T component)
@@ -135,7 +150,6 @@ private:
 	size_t size{};
 };
 
-
 class ComponentManager
 {
 	using ComponentId = StrId;
@@ -189,6 +203,26 @@ public:
 		{
 			component->OnEntityDestroyed(entity);
 		}
+	}
+
+	template <typename... Components>
+	Signature BuildSignature() const
+	{
+		return BuildSignatureHelper<Components...>();
+	}
+
+private:
+	template <typename Head, typename... Tail>
+	Signature BuildSignatureHelper() const
+	{
+		Signature signature;
+		ComponentType componentType = GetComponentType<Head>();
+		signature.set(componentType, true);
+		if constexpr (sizeof...(Tail) > 0)
+		{
+			signature |= BuildSignature<Tail...>();
+		}
+		return signature;
 	}
 
 private:
@@ -252,6 +286,26 @@ public:
 		signatures.insert({ systemId, signature });
 	}
 
+	template <typename T>
+	std::shared_ptr<System> GetSystem()
+	{
+		SystemId systemId = GetSystemId<T>();
+
+		ASSERT(systems.contains(systemId) && "System has not been registered.");
+
+		return systems[systemId];
+	}
+
+	template <typename T>
+	Signature GetSystemSignature() const
+	{
+		SystemId systemId = GetSystemId<T>();
+
+		ASSERT(signatures.contains(systemId) && "System has not been registered.");
+
+		return signatures[systemId];
+	}
+
 	void OnEntityDestroyed(Entity entity)
 	{
 		for (const auto& [_, system] : systems)
@@ -288,6 +342,12 @@ public:
 		return entityManager.CreateEntity();
 	}
 
+	template <int N>
+	std::array<Entity, N> CreateEntities()
+	{
+		return entityManager.CreateEntities<N>();
+	}
+
 	void DestroyEntity(Entity entity)
 	{
 		entityManager.DestroyEntity(entity);
@@ -313,6 +373,12 @@ public:
 		systemManager.OnEntitySignatureChanged(entity, signature);
 
 		return result;
+	}
+
+	template <typename... Components>
+	std::tuple<Components&...> AddComponents(Entity entity, Components... components)
+	{
+		return AddComponentsHelper<Components...>(entity, components...);
 	}
 
 	template <typename T>
@@ -355,18 +421,38 @@ public:
 		systemManager.SetSignature<T>(signature);
 	}
 
-private:
-	template <typename Head, typename... Tail>
+	template <typename T>
+	std::shared_ptr<T> GetSystem()
+	{
+		return systemManager.GetSystem<T>();
+	}
+
+	template <typename T>
+	Signature GetSystemSignature() const
+	{
+		return systemManager.GetSystemSignature<T>();
+	}
+
+	template <typename... Components>
 	Signature BuildSignature() const
 	{
-		Signature signature;
-		ComponentType componentType = GetComponentType<Head>();
-		signature.set(componentType, true);
-		if constexpr (sizeof...(Tail) > 0)
+		return componentManager.BuildSignature<Components...>();
+	}
+
+private:
+	template <typename Head, typename... Tail>
+	std::tuple<Head&, Tail&...> AddComponentsHelper(Entity entity, Head head, Tail... tail)
+	{
+		std::tuple<Head&> first = AddComponent(entity, head);
+		if constexpr (sizeof...(tail) > 0)
 		{
-			signature |= BuildSignature<Tail...>();
+			std::tuple<Tail&...> rest = AddComponentsHelper(entity, tail...);
+			return std::tuple_cat(first, rest);
 		}
-		return signature;
+		else
+		{
+			return first;
+		}
 	}
 
 private:
