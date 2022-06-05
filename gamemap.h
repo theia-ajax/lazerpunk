@@ -88,18 +88,23 @@ struct GameMap
 	std::vector<GameMapLayer> layers;
 };
 
+struct GameMapHandle { uint32_t handle; };
+constexpr bool operator==(const GameMapHandle& a, const GameMapHandle& b) { return a.handle == b.handle; }
+constexpr bool operator!=(const GameMapHandle& a, const GameMapHandle& b) { return a.handle != b.handle; }
+
 struct DrawContext;
 
 namespace map
 {
-	GameMap Load(const char* fileName);
-	void Reload(GameMap& map);
+	GameMapHandle Load(const char* fileName);
+	void Reload(GameMapHandle handle);
+	GameMap& Get(GameMapHandle handle);
 
 	void Draw(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet);
-	void DrawLayers(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet, StrId* layerNames, size_t count);
+	void DrawLayers(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet, const StrId* layerNames, size_t count);
 
 	template <int N>
-	void DrawLayers(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet, std::array<StrId, N> layers)
+	void DrawLayers(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet, const std::array<StrId, N>& layers)
 	{
 		DrawLayers(ctx, map, camera, sheet, layers.data(), layers.size());
 	}

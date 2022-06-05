@@ -11,6 +11,7 @@ struct SDL_Rect;
 struct DrawContext
 {
 	SDL_Renderer* renderer;
+	SpriteSheet& sheet;
 };
 
 struct DrawRect { Vec2 pos, dim; };

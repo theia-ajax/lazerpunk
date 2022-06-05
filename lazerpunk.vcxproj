@@ -158,15 +158,19 @@
     <ClCompile Include="draw.cpp" />
     <ClCompile Include="gamemap.cpp" />
     <ClCompile Include="impl.cpp" />
+    <ClCompile Include="input.cpp" />
+    <ClCompile Include="inputsystems.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="sprites.cpp" />
     <ClCompile Include="stringid.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="components.h" />
     <ClInclude Include="draw.h" />
     <ClInclude Include="ecs.h" />
     <ClInclude Include="enumflag.h" />
-    <ClInclude Include="game.inl" />
+    <ClInclude Include="input.h" />
+    <ClInclude Include="systems.h" />
     <ClInclude Include="gamemap.h" />
     <ClInclude Include="sprites.h" />
     <ClInclude Include="stringid.h" />

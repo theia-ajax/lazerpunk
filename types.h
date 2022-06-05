@@ -38,6 +38,7 @@ namespace math
 	using std::max;
 	using std::lerp;
 	using std::expf;
+	using std::clamp;
 
 	constexpr float Epsilon = FLT_EPSILON * 4;
 
@@ -146,6 +147,27 @@ struct Color
 
 struct SDL_Renderer;
 
+
+enum class Direction
+{
+	Invalid,
+	Left,
+	Right,
+	Up,
+	Down,
+	Count,
+};
+
+constexpr int kDirectionCount = static_cast<int>(Direction::Count);
+
+constexpr Vec2 DirectionVelocity(Direction direction)
+{
+	constexpr Vec2 moveVectors[kDirectionCount] = {
+		{0, 0}, {-1, 0}, {1, 0}, {0, -1}, {0, 1}
+	};
+	return moveVectors[static_cast<int>(direction)];
+}
+
 struct Camera
 {
 	Vec2 position;
@@ -155,6 +177,16 @@ struct Camera
 
 namespace camera
 {
-	inline Vec2 WorldToScreenScale(const Camera& camera, Vec2 world) { return world * camera.scale; }
-	inline Vec2 WorldToScreen(const Camera& camera, Vec2 world) { return world * camera.scale - camera.position * camera.scale; }
+	inline Vec2 WorldScaleToScreen(const Camera& camera, Vec2 world) { return world * camera.scale; }
+	inline Vec2 WorldToScreen(const Camera& camera, Vec2 world) { return world * camera.scale - camera.position; }
 }
+
+struct GameTime
+{
+	GameTime(double elapsed, double delta) : elapsedSec(elapsed), deltaSec(delta) {}
+	float t() const { return static_cast<float>(elapsedSec); }
+	float dt() const { return static_cast<float>(deltaSec); }
+private:
+	const double elapsedSec;
+	const double deltaSec;
+};

@@ -6,7 +6,8 @@
 #include <rapidjson/document.h>
 #include <rapidjson/istreamwrapper.h>
 #include <SDL2/SDL.h>
-
+#include <unordered_map>
+#include <queue>
 
 namespace
 {
@@ -274,35 +275,112 @@ namespace
 
 		return result;
 	}
-}
 
-GameMap map::Load(const char* fileName)
-{
-	std::ifstream inFileStream(fileName);
-	rapidjson::IStreamWrapper streamWrapper(inFileStream);
-
-	rapidjson::Document doc;
-	doc.ParseStream(streamWrapper);
-
-	ASSERT(doc.IsObject());
-	ASSERT(doc.HasMember("layers"));
-	ASSERT(doc["layers"].IsArray());
-	ASSERT(doc["layers"].Capacity() > 0);
-
-	GameMap result{ StrId(fileName) };
-
-	for (rapidjson::SizeType i = 0; i < doc["layers"].Capacity(); ++i)
+	GameMap Load(const char* fileName)
 	{
-		GameMapLayer layer = ParseLayer(doc, doc["layers"][i]);
-		result.layers.push_back(layer);
+		std::ifstream inFileStream(fileName);
+		rapidjson::IStreamWrapper streamWrapper(inFileStream);
+
+		rapidjson::Document doc;
+		doc.ParseStream(streamWrapper);
+
+		ASSERT(doc.IsObject());
+		ASSERT(doc.HasMember("layers"));
+		ASSERT(doc["layers"].IsArray());
+		ASSERT(doc["layers"].Capacity() > 0);
+
+		GameMap result{ StrId(fileName) };
+
+		for (rapidjson::SizeType i = 0; i < doc["layers"].Capacity(); ++i)
+		{
+			GameMapLayer layer = ParseLayer(doc, doc["layers"][i]);
+			result.layers.push_back(layer);
+		}
+
+		return result;
 	}
 
-	return result;
+
+
+	class GameMapManager
+	{
+	public:
+		static constexpr uint32_t kMaxLoadedMaps = 64;
+		static constexpr GameMapHandle kInvalidHandle{ 0 };
+
+	public:
+		GameMapManager()
+		{
+			for (uint32_t i = 1; i <= kMaxLoadedMaps; ++i)
+			{
+				availableHandles.push(GameMapHandle{ i });
+			}
+		}
+
+		GameMapHandle Create()
+		{
+			ASSERT(!availableHandles.empty() && "Ran out of available maps.");
+
+			GameMapHandle handle = availableHandles.front();
+			availableHandles.pop();
+			return handle;
+		}
+
+		void Remove(GameMapHandle handle)
+		{
+			ASSERT(handle != kInvalidHandle && "Invalid handle");
+			ASSERT(handle.handle <= kMaxLoadedMaps && "Invalid handle");
+			GameMap& map = Get(handle);
+			mapHandlesByName.erase(map.assetPathId);
+			map = {};
+			availableHandles.push(handle);
+		}
+
+		GameMap& Get(GameMapHandle handle)
+		{
+			ASSERT(handle != kInvalidHandle && "Invalid handle");
+			ASSERT(handle.handle <= kMaxLoadedMaps && "Invalid handle");
+			return mapsByHandle[handle.handle - 1];
+		}
+
+		GameMapHandle LoadOrGet(const char* fileName)
+		{
+			StrId assetPathId = StrId(fileName);
+
+			if (mapHandlesByName.contains(assetPathId))
+			{
+				return mapHandlesByName[assetPathId];
+			}
+
+			GameMapHandle handle = Create();
+			Get(handle) = Load(fileName);
+			mapHandlesByName[assetPathId] = handle;
+			return handle;
+		}
+
+	private:
+		std::queue<GameMapHandle> availableHandles;
+		std::array<GameMap, kMaxLoadedMaps + 1> mapsByHandle;
+		std::unordered_map<StrId, GameMapHandle> mapHandlesByName;
+	};
+
+	GameMapManager mapManager;
 }
 
-void map::Reload(GameMap& map)
+GameMapHandle map::Load(const char* fileName)
 {
-	map = map::Load(map.assetPathId.CStr());
+	return mapManager.LoadOrGet(fileName);
+}
+
+void map::Reload(GameMapHandle handle)
+{
+	GameMap& gameMap = mapManager.Get(handle);
+	gameMap = ::Load(gameMap.assetPathId.CStr());
+}
+
+GameMap& map::Get(GameMapHandle handle)
+{
+	return mapManager.Get(handle);
 }
 
 namespace
@@ -339,7 +417,7 @@ namespace
 			if (!visible) continue;
 
 			Vec2 screenPos = camera::WorldToScreen(camera, position);
-			Vec2 screenDim = camera::WorldToScreenScale(camera, dimensions);
+			Vec2 screenDim = camera::WorldScaleToScreen(camera, dimensions);
 
 			switch (objectType)
 			{
@@ -433,12 +511,12 @@ void map::Draw(const DrawContext& ctx, const GameMap& map, const Camera& camera,
 	}
 }
 
-void map::DrawLayers(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet, StrId* layerNames, size_t count)
+void map::DrawLayers(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet, const StrId* layerNames, size_t count)
 {
 	for (const auto& layer : map.layers)
 	{
 		StrId nameId = GetLayerNameId(layer);
-		StrId* end = layerNames + count;
+		const StrId* end = layerNames + count;
 		if (auto find = std::find_if(layerNames, end, [nameId](auto&& id) {return id == nameId; }); find != end)
 		{
 			DrawLayer(ctx, layer, camera, sheet);

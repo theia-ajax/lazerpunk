@@ -1,40 +1,29 @@
 
 #include "types.h"
-#include "gamemap.h"
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 #include "sokol_time.h"
+#include "input.h"
 #include "draw.h"
 #include "ecs.h"
+#include "components.h"
+#include "systems.h"
 #include <array>
 
-namespace input
-{
-	void BeginNewFrame();
-	void KeyDownEvent(SDL_Scancode key, bool isPressed, bool isRepeat);
-	bool GetKey(SDL_Scancode key);
-	bool GetKeyDown(SDL_Scancode key);
-	bool GetKeyUp(SDL_Scancode key);
-	bool GetKeyRepeat(SDL_Scancode key);
-}
-
-template <typename T>
-constexpr T clamp(T v, T min, T max) { return (v < min) ? min : ((v > max) ? max : v); }
-
-
-
-struct GameTime
-{
-	GameTime(double elapsed, double delta) : elapsedSec(elapsed), deltaSec(delta) {}
-	float t() const { return static_cast<float>(elapsedSec); }
-	float dt() const { return static_cast<float>(deltaSec); }
-private:
-	const double elapsedSec;
-	const double deltaSec;
-};
-#include "game.inl"
-
 World world;
+
+struct SpriteSheetViewContext
+{
+	SpriteSheet& sheet;
+	TTF_Font* debugFont{};
+	int canvasX{}, canvasY{};
+	bool visible{};
+	Vec2 offset{};
+	SDL_Point selection{};
+};
+
+void SpriteSheetViewControl(SpriteSheetViewContext& ssv);
+void SpriteSheetViewRender(const DrawContext& ctx, const SpriteSheetViewContext& ssv);
 
 int main(int argc, char* argv[])
 {
@@ -46,57 +35,59 @@ int main(int argc, char* argv[])
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
 	SDL_RenderSetLogicalSize(renderer, 256, 144);
-	Camera gameCamera;
+
 	int canvasX, canvasY;
 	SDL_RenderGetLogicalSize(renderer, &canvasX, &canvasY);
-	gameCamera.extents.x = static_cast<float>(canvasX);
-	gameCamera.extents.y = static_cast<float>(canvasY);
+	Vec2 viewExtents{ static_cast<float>(canvasX), static_cast<float>(canvasY) };
 
 	SpriteSheet sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);;
-	GameMap map = map::Load("assets/testmap.tmj");
+	GameMapHandle map = map::Load("assets/testmap.tmj");
 
-	DrawContext drawContext{ renderer };
+	DrawContext drawContext{ renderer, sheet };
+	SpriteSheetViewContext ssv{ sheet, debugFont, canvasX, canvasY };
 
-	GameState state = {
-		.camera = gameCamera,
-		.sprites = sheet,
-		.map = map,
-	};
-	game::Init(state);
+	world.RegisterComponents<
+		Transform, Velocity,
+		GameInputGather, GameInput,
+		PlayerControl,
+		Facing,
+		FacingSprites,
+		GameMapRef,
+		CameraView,
+		SpriteRender,
+		CameraFollowEntity>();
 
-	world.RegisterComponent<Transform>();
-	world.RegisterComponent<GameInput>();
-	world.RegisterComponent<GameInputGather>();
-	world.RegisterComponent<Facing>();
-	world.RegisterComponent<FacingSprites>();
-	world.RegisterComponent<Velocity>();
-	world.RegisterComponent<Sprite>();
-
+	auto viewSystem = world.RegisterSystem<ViewSystem, Transform, CameraView>();
 	auto gatherInputSystem = world.RegisterSystem<GatherInputSystem, GameInputGather, GameInput>();
-	auto playerControlSystem = world.RegisterSystem<PlayerControlSystem, GameInput, Transform, Facing, Velocity>();
-	auto spriteFacingSystem = world.RegisterSystem<SpriteFacingSystem, Facing, FacingSprites, Sprite>();
+	auto playerControlSystem = world.RegisterSystem<PlayerControlSystem, GameInput, Transform, Facing, Velocity, PlayerControl>();
+	auto spriteFacingSystem = world.RegisterSystem<SpriteFacingSystem, Facing, FacingSprites, SpriteRender>();
 	auto moverSystem = world.RegisterSystem<MoverSystem, Transform, Velocity>();
+	auto spriteRenderSystem = world.RegisterSystem<SpriteRenderSystem, Transform, SpriteRender>();
+	auto gameMapRenderSystem = world.RegisterSystem<GameMapRenderSystem, Transform, GameMapRef>();
+	auto cameraFollowSystem = world.RegisterSystem<CameraFollowSystem, Transform, CameraView, CameraFollowEntity>();
 
-	Entity playerEntity = world.CreateEntity();
+	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
+
+	world.AddComponents(cameraEntity,
+		Transform{},
+		CameraView{ viewExtents },
+		CameraFollowEntity{ playerEntity, {{-2, -0.75f}, {2, 0.75f}} });
+
+	world.AddComponents(mapEntity,
+		Transform{},
+		GameMapRef{ map });
+
 	world.AddComponents(playerEntity,
 		Transform{ {8, 5} },
 		GameInput{},
 		GameInputGather{},
+		PlayerControl{},
 		Facing{ Direction::Right },
 		Velocity{},
 		FacingSprites{ 1043, 1042, 1041 },
-		Sprite{});
+		SpriteRender{1043, SpriteFlipFlags::None, vec2::Half});
 
-	//world.AddComponent(playerEntity, Transform{{8, 5}});
-	//world.AddComponent(playerEntity, GameInput{});
-	//world.AddComponent(playerEntity, GameInputGather{});
-	//world.AddComponent(playerEntity, Facing{ Direction::Right });
-	//world.AddComponent(playerEntity, Velocity{});
-	//world.AddComponent(playerEntity, FacingSprites{ 1043, 1042, 1041 });
-	//world.AddComponent(playerEntity, Sprite{});
-
-	Vec2 ssvOffset = {};
-	SDL_Point ssvSelection = {};
+	cameraFollowSystem->SnapFocusToFollow(cameraEntity);
 
 	constexpr double kTargetFrameTime = 0.0;
 	constexpr double kFixedTimeStepSec = 1.0 / 60.0;
@@ -138,12 +129,12 @@ int main(int argc, char* argv[])
 
 		if (input::GetKeyDown(SDL_SCANCODE_F1))
 		{
-			showSpriteSheet = !showSpriteSheet;
+			ssv.visible = !ssv.visible;
 		}
 
 		if (input::GetKeyDown(SDL_SCANCODE_F5))
 		{
-			map::Reload(state.map);
+			map::Reload(map);
 		}
 
 		uint64_t deltaTime = stm_laptime(&clock);
@@ -164,99 +155,27 @@ int main(int argc, char* argv[])
 		}
 
 		GameTime gameTime(elapsedSec, deltaSec);
-		game::Update(state, gameTime);
 
 		gatherInputSystem->Update(gameTime);
 		playerControlSystem->Update(gameTime);
 		spriteFacingSystem->Update();
 		moverSystem->Update(gameTime);
+		cameraFollowSystem->Update(gameTime);
+		viewSystem->Update(gameTime);
 
-		timeAccumulator += deltaSec;
-		while (timeAccumulator >= kFixedTimeStepSec)
-		{
-			game::FixedUpdate(state, GameTime{ elapsedSec, kFixedTimeStepSec });
-			timeAccumulator -= kFixedTimeStepSec;
-		}
-
-		if (showSpriteSheet)
-		{
-			if (input::GetKeyRepeat(SDL_SCANCODE_H)) ssvSelection.x--;
-			if (input::GetKeyRepeat(SDL_SCANCODE_L)) ssvSelection.x++;
-			if (input::GetKeyRepeat(SDL_SCANCODE_K)) ssvSelection.y--;
-			if (input::GetKeyRepeat(SDL_SCANCODE_J)) ssvSelection.y++;
-
-			ssvSelection.x = clamp(ssvSelection.x, 0, sprite_sheet::Columns(sheet) - 1);
-			ssvSelection.y = clamp(ssvSelection.y, 0, sprite_sheet::Rows(sheet) - 1);
-
-			SDL_Point viewBase{ static_cast<int>(-ssvOffset.x / sheet.spriteWidth), static_cast<int>(-ssvOffset.y / sheet.spriteHeight) };
-
-			int maxX = (canvasX - 64) / 16 - 1;
-			int maxY = canvasY / 16 - 1;
-			if (ssvSelection.x - viewBase.x > maxX) viewBase.x = ssvSelection.x - maxX;
-			if (ssvSelection.x - viewBase.x < 0) viewBase.x = ssvSelection.x;
-			if (ssvSelection.y - viewBase.y > maxY) viewBase.y = ssvSelection.y - maxY;
-			if (ssvSelection.y - viewBase.y < 0) viewBase.y = ssvSelection.y;
-
-			ssvOffset.x = static_cast<float>(-viewBase.x * sheet.spriteWidth);
-			ssvOffset.y = static_cast<float>(-viewBase.y * sheet.spriteHeight);
-		}
+		SpriteSheetViewControl(ssv);
 
 		draw::Clear(drawContext);
+		gameMapRenderSystem->RenderLayers(drawContext, std::array{ StrId("Background") });
+		spriteRenderSystem->Render(drawContext);
 
-		//game::Render(drawContext, state, gameTime);
-
-		{
-			const auto& playerTx = world.GetComponent<Transform>(playerEntity);
-			const auto& sprite = world.GetComponent<Sprite>(playerEntity);
-			Vec2 screenPos = camera::WorldToScreen(state.camera, playerTx.position);
-			draw::Point(drawContext, screenPos, { 255, 0, 0, 255 });
-			draw::Sprite(drawContext, sheet, sprite.spriteId, screenPos, playerTx.rotation, sprite.flipFlags, vec2::Half);
-		}
-
-
-		if (showSpriteSheet)
-		{
-			draw::Clear(drawContext);
-
-			for (int y = 0; y < sprite_sheet::Rows(sheet); ++y)
-			{
-				for (int x = 0; x < sprite_sheet::Columns(sheet); ++x)
-				{
-					int spriteId = sprite_sheet::GetSpriteId(sheet, x, y);
-					Vec2 screenPosition = vec2::Create(x, y) * sheet.spriteExtents + ssvOffset;
-					draw::Sprite(drawContext, sheet, spriteId, screenPosition, 0.0f, SpriteFlipFlags::None);
-				}
-			}
-
-			Vec2 ssvSelectionF{ static_cast<float>(ssvSelection.x), static_cast<float>(ssvSelection.y) };
-			SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
-			SDL_Rect selRect{ static_cast<int>(ssvSelection.x * sheet.spriteWidth + ssvOffset.x), static_cast<int>(ssvSelection.y * sheet.spriteHeight + ssvOffset.y), sheet.spriteWidth, sheet.spriteHeight };
-			SDL_RenderDrawRect(renderer, &selRect);
-
-			DrawRect selDrawRect{ ssvSelectionF * sheet.spriteExtents + ssvOffset, sheet.spriteExtents };
-			draw::Rect(drawContext, selDrawRect, Color{ 255, 255, 0, 255 });
-
-			SDL_Rect panelRect{ canvasX - 64, 0, 64, canvasY };
-			DrawRect panelDrawRect = draw_rect::Create(panelRect);
-			draw::RectFill(drawContext, panelDrawRect, Color{ 32, 32, 32, 255 });
-			draw::Rect(drawContext, panelDrawRect, Color{ 192, 192, 192, 255 });
-
-			char buffer[32];
-			int selSpriteId = ssvSelection.y * sprite_sheet::Columns(sheet) + ssvSelection.x;
-			snprintf(buffer, 32, "ID:%d\nX :%d\nY :%d", selSpriteId, ssvSelection.x, ssvSelection.y);
-			SDL_Surface* textSurface = TTF_RenderText_Blended_Wrapped(debugFont, buffer, SDL_Color{ 192, 192, 192, 255 }, 64);
-			SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-			SDL_Rect textRect{ panelRect.x + 2, panelRect.y + 2, textSurface->w, textSurface->h };
-			SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
-			SDL_DestroyTexture(textTexture);
-			SDL_FreeSurface(textSurface);
-		}
+		SpriteSheetViewRender(drawContext, ssv);
 
 		SDL_RenderPresent(renderer);
 
 		++frameCountThisSecond;
 
-		if (kTargetFrameTime > 0)
+		if constexpr (kTargetFrameTime > 0)
 		{
 			while (stm_sec(stm_diff(stm_now(), lastFrameTime)) < kTargetFrameTime) {}
 			lastFrameTime = stm_now();
@@ -268,58 +187,79 @@ int main(int argc, char* argv[])
 	return 0;
 }
 
-namespace input
-{
-	struct Input
-	{
-		struct KeyState
-		{
-			bool isDown;
-			bool isRepeat;
-		};
 
-		struct Keys
-		{
-			KeyState currDown[SDL_NUM_SCANCODES];
-			KeyState prevDown[SDL_NUM_SCANCODES];
-		} keys;
+void SpriteSheetViewControl(SpriteSheetViewContext& ssv)
+{
+	if (!ssv.visible)
+		return;
+	if (input::GetKeyRepeat(SDL_SCANCODE_H)) ssv.selection.x--;
+	if (input::GetKeyRepeat(SDL_SCANCODE_L)) ssv.selection.x++;
+	if (input::GetKeyRepeat(SDL_SCANCODE_K)) ssv.selection.y--;
+	if (input::GetKeyRepeat(SDL_SCANCODE_J)) ssv.selection.y++;
+
+	ssv.selection.x = math::clamp(ssv.selection.x, 0, sprite_sheet::Columns(ssv.sheet) - 1);
+	ssv.selection.y = math::clamp(ssv.selection.y, 0, sprite_sheet::Rows(ssv.sheet) - 1);
+
+	SDL_Point viewBase{
+		static_cast<int>(-ssv.offset.x / ssv.sheet.spriteWidth),
+		static_cast<int>(-ssv.offset.y / ssv.sheet.spriteHeight)
 	};
 
-	namespace
+	int maxX = (ssv.canvasX - 64) / 16 - 1;
+	int maxY = ssv.canvasY / 16 - 1;
+	if (ssv.selection.x - viewBase.x > maxX) viewBase.x = ssv.selection.x - maxX;
+	if (ssv.selection.x - viewBase.x < 0) viewBase.x = ssv.selection.x;
+	if (ssv.selection.y - viewBase.y > maxY) viewBase.y = ssv.selection.y - maxY;
+	if (ssv.selection.y - viewBase.y < 0) viewBase.y = ssv.selection.y;
+
+	ssv.offset.x = static_cast<float>(-viewBase.x * ssv.sheet.spriteWidth);
+	ssv.offset.y = static_cast<float>(-viewBase.y * ssv.sheet.spriteHeight);
+}
+
+void SpriteSheetViewRender(const DrawContext& ctx, const SpriteSheetViewContext& ssv)
+{
+	if (!ssv.visible)
+		return;
+
+	draw::Clear(ctx);
+
+	for (int y = 0; y < sprite_sheet::Rows(ssv.sheet); ++y)
 	{
-		Input input{};
+		for (int x = 0; x < sprite_sheet::Columns(ssv.sheet); ++x)
+		{
+			int spriteId = sprite_sheet::GetSpriteId(ssv.sheet, x, y);
+			Vec2 screenPosition = vec2::Create(x, y) * ssv.sheet.spriteExtents + ssv.offset;
+			draw::Sprite(ctx, ssv.sheet, spriteId, screenPosition, 0.0f, SpriteFlipFlags::None);
+		}
 	}
 
+	Vec2 ssvSelectionF{ static_cast<float>(ssv.selection.x), static_cast<float>(ssv.selection.y) };
+	SDL_SetRenderDrawColor(ctx.renderer, 255, 255, 0, 255);
+	SDL_Rect selRect{
+		static_cast<int>(ssv.selection.x * ssv.sheet.spriteWidth + ssv.offset.x),
+		static_cast<int>(ssv.selection.y * ssv.sheet.spriteHeight + ssv.offset.y),
+		ssv.sheet.spriteWidth,
+		ssv.sheet.spriteHeight
+	};
+	SDL_RenderDrawRect(ctx.renderer, &selRect);
 
-	void BeginNewFrame()
-	{
-		std::memcpy(input.keys.prevDown, input.keys.currDown, sizeof(input.keys.currDown));
-	}
+	DrawRect selDrawRect{ ssvSelectionF * ssv.sheet.spriteExtents + ssv.offset, ssv.sheet.spriteExtents };
+	draw::Rect(ctx, selDrawRect, Color{ 255, 255, 0, 255 });
 
-	void KeyDownEvent(SDL_Scancode key, bool isPressed, bool isRepeat)
-	{
-		input.keys.currDown[key] = { isPressed, isRepeat };
-	}
+	SDL_Rect panelRect{ ssv.canvasX - 64, 0, 64, ssv.canvasY };
+	DrawRect panelDrawRect = draw_rect::Create(panelRect);
+	draw::RectFill(ctx, panelDrawRect, Color{ 32, 32, 32, 255 });
+	draw::Rect(ctx, panelDrawRect, Color{ 192, 192, 192, 255 });
 
-	bool GetKey(SDL_Scancode key)
-	{
-		return input.keys.currDown[key].isDown;
-	}
-
-	bool GetKeyDown(SDL_Scancode key)
-	{
-		return input.keys.currDown[key].isDown && !input.keys.prevDown[key].isDown && !input.keys.currDown[key].isRepeat;
-	}
-
-	bool GetKeyUp(SDL_Scancode key)
-	{
-		return !input.keys.currDown[key].isDown && input.keys.prevDown[key].isDown;
-	}
-
-	bool GetKeyRepeat(SDL_Scancode key)
-	{
-		return input.keys.currDown[key].isDown && input.keys.currDown[key].isRepeat || GetKeyDown(key);
-	}
+	char buffer[32];
+	int selSpriteId = ssv.selection.y * sprite_sheet::Columns(ssv.sheet) + ssv.selection.x;
+	snprintf(buffer, 32, "ID:%d\nX :%d\nY :%d", selSpriteId, ssv.selection.x, ssv.selection.y);
+	SDL_Surface* textSurface = TTF_RenderText_Blended_Wrapped(ssv.debugFont, buffer, SDL_Color{ 192, 192, 192, 255 }, 64);
+	SDL_Texture* textTexture = SDL_CreateTextureFromSurface(ctx.renderer, textSurface);
+	SDL_Rect textRect{ panelRect.x + 2, panelRect.y + 2, textSurface->w, textSurface->h };
+	SDL_RenderCopy(ctx.renderer, textTexture, nullptr, &textRect);
+	SDL_DestroyTexture(textTexture);
+	SDL_FreeSurface(textSurface);
 }
 
 namespace internal

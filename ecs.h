@@ -15,6 +15,7 @@
 class World;
 using Entity = uint32_t;
 constexpr Entity kMaxEntities = 4096;
+constexpr Entity kInvalidEntity = 0;
 
 using ComponentType = uint8_t;
 constexpr ComponentType kMaxComponents = 64;
@@ -28,7 +29,7 @@ class EntityManager
 public:
 	EntityManager()
 	{
-		for (Entity entity = 0; entity < kMaxEntities; ++entity)
+		for (Entity entity = 1; entity <= kMaxEntities; ++entity)
 			availableEntities.push(entity);
 	}
 
@@ -242,10 +243,10 @@ private:
 struct System
 {
 	World& GetWorld() const { return *world; }
-	std::set<Entity> entities;
+	std::set<Entity> entities{};
+
 	friend class SystemManager;
 private:
-	void SetWorld(World* world) { this->world = world; }
 	World* world{};
 };
 
@@ -270,7 +271,21 @@ public:
 		ASSERT(!systems.contains(systemId) && "System already registerd.");
 
 		auto system = std::make_shared<T>();
-		system->SetWorld(world);
+		system->world = world;
+
+		systems.insert({ systemId, system });
+		return system;
+	}
+
+	template <typename T, typename Config>
+	std::shared_ptr<T> RegisterSystemConfigured(World* world, const Config& config)
+	{
+		SystemId systemId = GetSystemId<T>();
+
+		ASSERT(!systems.contains(systemId) && "System already registerd.");
+
+		auto system = std::make_shared<T>(config);
+		system->world = world;
 
 		systems.insert({ systemId, system });
 		return system;
@@ -287,13 +302,13 @@ public:
 	}
 
 	template <typename T>
-	std::shared_ptr<System> GetSystem()
+	std::shared_ptr<T> GetSystem()
 	{
 		SystemId systemId = GetSystemId<T>();
 
 		ASSERT(systems.contains(systemId) && "System has not been registered.");
 
-		return systems[systemId];
+		return std::reinterpret_pointer_cast<T, System>(systems[systemId]);
 	}
 
 	template <typename T>
@@ -361,6 +376,12 @@ public:
 		componentManager.RegisterComponent<T>();
 	}
 
+	template <typename... Components>
+	void RegisterComponents()
+	{
+		RegisterComponentsHelper<Components...>();
+	}
+
 	template <typename T>
 	T& AddComponent(Entity entity, T component)
 	{
@@ -378,7 +399,7 @@ public:
 	template <typename... Components>
 	std::tuple<Components&...> AddComponents(Entity entity, Components... components)
 	{
-		return AddComponentsHelper<Components...>(entity, components...);
+		return AddComponentsHelper(entity, components...);
 	}
 
 	template <typename T>
@@ -399,17 +420,31 @@ public:
 		return componentManager.GetComponent<T>(entity);
 	}
 
+	template <typename... Components>
+	std::tuple<Components&...> GetComponents(Entity entity)
+	{
+		return GetComponentsHelper<Components...>(entity);
+	}
+
 	template <typename T>
 	ComponentType GetComponentType() const
 	{
 		return componentManager.GetComponentType<T>();
 	}
 
-
 	template <typename T, typename... Components>
 	std::shared_ptr<T> RegisterSystem()
 	{
 		auto system = systemManager.RegisterSystem<T>(this);
+		Signature signature = BuildSignature<Components...>();
+		SetSystemSignature<T>(signature);
+		return system;
+	}
+
+	template <typename T, typename... Components>
+	std::shared_ptr<T> RegisterSystemConfigured(const typename T::Config& config)
+	{
+		auto system = systemManager.RegisterSystemConfigured<T, typename T::Config>(this, config);
 		Signature signature = BuildSignature<Components...>();
 		SetSystemSignature<T>(signature);
 		return system;
@@ -441,6 +476,14 @@ public:
 
 private:
 	template <typename Head, typename... Tail>
+	void RegisterComponentsHelper()
+	{
+		RegisterComponent<Head>();
+		if constexpr (sizeof...(Tail) > 0)
+			RegisterComponentsHelper<Tail...>();
+	}
+
+	template <typename Head, typename... Tail>
 	std::tuple<Head&, Tail&...> AddComponentsHelper(Entity entity, Head head, Tail... tail)
 	{
 		std::tuple<Head&> first = AddComponent(entity, head);
@@ -455,8 +498,25 @@ private:
 		}
 	}
 
+	template <typename Head, typename... Tail>
+	std::tuple<Head&, Tail&...> GetComponentsHelper(Entity entity)
+	{
+		std::tuple<Head&> first = GetComponent<Head>(entity);
+		if constexpr (sizeof...(Tail) > 0)
+		{
+			std::tuple<Tail&...> rest = GetComponentsHelper<Tail...>(entity);
+			return std::tuple_cat(first, rest);
+		}
+		else
+		{
+			return first;
+		}
+	}
+
+
 private:
 	EntityManager entityManager;
 	ComponentManager componentManager;
 	SystemManager systemManager;
 };
+

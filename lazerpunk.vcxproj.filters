@@ -28,6 +28,12 @@
     <ClCompile Include="draw.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="inputsystems.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="input.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="types.h">
@@ -36,7 +42,7 @@
     <ClInclude Include="sprites.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="game.inl">
+    <ClInclude Include="systems.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="enumflag.h">
@@ -55,6 +61,12 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="ecs.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="components.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="input.h">
       <Filter>Source Files</Filter>
     </ClInclude>
   </ItemGroup>
