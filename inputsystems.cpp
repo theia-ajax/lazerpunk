@@ -38,10 +38,12 @@ void GatherInputSystem::Update(const GameTime& time) const
 		gameInput.moveInput = DirectionVelocity(direction);
 		gameInput.direction = direction;
 
-		if (input::GetKeyDown(SDL_SCANCODE_Z))
+		if (input::GetKeyDown(SDL_SCANCODE_X))
 		{
 			gameInput.requestDash = true;
 		}
+
+		gameInput.requestShoot = input::GetKey(SDL_SCANCODE_Z);
 	}
 }
 

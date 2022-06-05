@@ -29,6 +29,7 @@ struct GameInput
 	Direction direction{};
 	Vec2 moveInput{};
 	bool requestDash{};
+	bool requestShoot{};
 };
 
 struct Facing
@@ -41,11 +42,22 @@ struct Velocity
 	Vec2 velocity{};
 };
 
+struct Expiration
+{
+	float secRemaining{};
+};
+
 struct PlayerControl
 {
 	Vec2 velocity{};
 	Vec2 dashVelocity{};
 	float minDashThreshold = 0.1f;
+};
+
+struct PlayerShootControl
+{
+	float cooldownSec{};
+	float cooldownRemaining{};
 };
 
 struct FacingSprites

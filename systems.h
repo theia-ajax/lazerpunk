@@ -54,6 +54,37 @@ struct PlayerControlSystem : System
 	}
 };
 
+struct PlayerShootControlSystem : System
+{
+	void Update(const GameTime& time) const
+	{
+		for (Entity entity : entities)
+		{
+			const auto [input, transform, facing, velocity] = GetWorld().GetComponents<GameInput, Transform, Facing, Velocity>(entity);
+			auto& shootControl = GetWorld().GetComponent<PlayerShootControl>(entity);
+
+			if (shootControl.cooldownRemaining > 0)
+				shootControl.cooldownRemaining -= time.dt();
+
+			if (input.requestShoot)
+			{
+				if (shootControl.cooldownRemaining <= 0.0f)
+				{
+					shootControl.cooldownRemaining += shootControl.cooldownSec;
+
+					Entity bulletEntity = GetWorld().CreateEntity();
+					GetWorld().AddComponents(bulletEntity,
+							Transform{{transform.position}},
+							Velocity{vec2::UnitX},
+							Facing{facing.facing},
+							SpriteRender{644},
+							Expiration{2.0f});
+				}
+			}
+		}
+	}
+};
+
 struct SpriteFacingSystem : System
 {
 	void Update() const
@@ -217,6 +248,30 @@ struct GameMapRenderSystem : System
 			const auto& [mapHandle] = GetWorld().GetComponent<GameMapRef>(entity);
 			const auto& map = map::Get(mapHandle);
 			map::DrawLayers<N>(ctx, map, viewSystem->ActiveCamera(), ctx.sheet, layers);
+		}
+	}
+};
+
+struct EntityExpirationSystem : System
+{
+	void Update(const GameTime& time) const
+	{
+		std::queue<Entity> removeQueue{};
+
+		for (Entity entity : entities)
+		{
+			auto& [secRemaining] = GetWorld().GetComponent<Expiration>(entity);
+
+			secRemaining -= time.dt();
+
+			if (secRemaining <= 0)
+				removeQueue.push(entity);
+		}
+
+		while (!removeQueue.empty())
+		{
+			GetWorld().DestroyEntity(removeQueue.front());
+			removeQueue.pop();
 		}
 	}
 };

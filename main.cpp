@@ -47,9 +47,11 @@ int main(int argc, char* argv[])
 	SpriteSheetViewContext ssv{ sheet, debugFont, canvasX, canvasY };
 
 	world.RegisterComponents<
+		Expiration,
 		Transform, Velocity,
 		GameInputGather, GameInput,
 		PlayerControl,
+		PlayerShootControl,
 		Facing,
 		FacingSprites,
 		GameMapRef,
@@ -57,9 +59,11 @@ int main(int argc, char* argv[])
 		SpriteRender,
 		CameraFollowEntity>();
 
+	auto expirationSystem = world.RegisterSystem<EntityExpirationSystem, Expiration>();
 	auto viewSystem = world.RegisterSystem<ViewSystem, Transform, CameraView>();
 	auto gatherInputSystem = world.RegisterSystem<GatherInputSystem, GameInputGather, GameInput>();
 	auto playerControlSystem = world.RegisterSystem<PlayerControlSystem, GameInput, Transform, Facing, Velocity, PlayerControl>();
+	auto playerShootSystem = world.RegisterSystem<PlayerShootControlSystem, GameInput, Transform, Facing, Velocity, PlayerShootControl>();
 	auto spriteFacingSystem = world.RegisterSystem<SpriteFacingSystem, Facing, FacingSprites, SpriteRender>();
 	auto moverSystem = world.RegisterSystem<MoverSystem, Transform, Velocity>();
 	auto spriteRenderSystem = world.RegisterSystem<SpriteRenderSystem, Transform, SpriteRender>();
@@ -82,6 +86,7 @@ int main(int argc, char* argv[])
 		GameInput{},
 		GameInputGather{},
 		PlayerControl{},
+		PlayerShootControl{0.077f},
 		Facing{ Direction::Right },
 		Velocity{},
 		FacingSprites{ 1043, 1042, 1041 },
@@ -156,8 +161,10 @@ int main(int argc, char* argv[])
 
 		GameTime gameTime(elapsedSec, deltaSec);
 
+		expirationSystem->Update(gameTime);
 		gatherInputSystem->Update(gameTime);
 		playerControlSystem->Update(gameTime);
+		playerShootSystem->Update(gameTime);
 		spriteFacingSystem->Update();
 		moverSystem->Update(gameTime);
 		cameraFollowSystem->Update(gameTime);

@@ -52,3 +52,4 @@ struct std::hash<StrId>
 		return std::hash<StrId::RawType>{}(s.RawValue());
 	}
 };
+
