@@ -8,14 +8,8 @@
     <Filter Include="Assets">
       <UniqueIdentifier>{b7b28301-2d74-4951-ade4-2cc35d542574}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\Components">
-      <UniqueIdentifier>{ad578fbb-b9ec-484d-b594-be1d60dc82ce}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\Systems">
       <UniqueIdentifier>{aef1319a-45d6-4393-843c-d6a6aad04c9d}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Systems\Common">
-      <UniqueIdentifier>{abdd65a7-f3b9-42f6-bc36-602cab91e2df}</UniqueIdentifier>
     </Filter>
     <Filter Include="Source Files\Systems\Core">
       <UniqueIdentifier>{f25f0bec-2d02-4eb5-9901-417fc30f8646}</UniqueIdentifier>
@@ -99,12 +93,6 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="components.h">
-      <Filter>Source Files\Components</Filter>
-    </ClInclude>
-    <ClInclude Include="systems.h">
-      <Filter>Source Files\Systems\Common</Filter>
-    </ClInclude>
     <ClInclude Include="strpool.h">
       <Filter>Source Files\External</Filter>
     </ClInclude>
@@ -173,6 +161,12 @@
     </ClInclude>
     <ClInclude Include="EnemyFollowTargetSystem.h">
       <Filter>Source Files\Systems\Game\Controllers</Filter>
+    </ClInclude>
+    <ClInclude Include="systems.h">
+      <Filter>Source Files\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="components.h">
+      <Filter>Source Files\Game</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
