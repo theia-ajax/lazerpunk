@@ -65,6 +65,16 @@ struct PlayerShootControl
 	float cooldownRemaining{};
 };
 
+struct Steering
+{
+	
+};
+
+struct EnemyTag
+{
+	
+};
+
 struct FacingSprites
 {
 	int sideId{};

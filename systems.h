@@ -300,3 +300,48 @@ struct EntityExpirationSystem : System
 		}
 	}
 };
+
+struct EnemyFollowTargetSystem : System
+{
+	Entity targetEntity{};
+
+	void Update(const GameTime& time)
+	{
+		if (!targetEntity)
+			return;
+
+		const auto& targetTransform = GetWorld().GetComponent<Transform>(targetEntity);
+
+		for (Entity entity : entities)
+		{
+			auto [transform, velocity] = GetWorld().GetComponents<Transform, Velocity>(entity);
+
+			Vec2 delta = targetTransform.position - transform.position;
+			Vec2 dir = vec2::Normalize(delta);
+			Vec2 vel = vec2::Damp(velocity.velocity, dir * 10, 0.4f, time.dt());
+			velocity.velocity = vel;
+		}
+
+		for (Entity entity0 : entities)
+		{
+			auto [tx0, vel0] = GetWorld().GetComponents<Transform, Velocity>(entity0);
+
+			for (Entity entity1 : entities)
+			{
+				if (entity0 == entity1)
+					continue;
+
+				auto [tx1, vel1] = GetWorld().GetComponents<Transform, Velocity>(entity1);
+
+				Vec2 delta = tx1.position - tx0.position;
+				float dist = vec2::Length(delta);
+				Vec2 dir = vec2::Normalize(delta);
+				if (vec2::Length(delta) < 1.0f)
+				{
+					vel0.velocity = vel0.velocity - dir * 0.01f;
+					vel1.velocity = vel1.velocity + dir * 0.01f;
+				}
+			}
+		}
+	}
+};

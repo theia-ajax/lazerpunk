@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
 	TTF_Init();
 	TTF_Font* debugFont = TTF_OpenFont("assets/PressStart2P-Regular.ttf", 8);
 
-	random::XorShiftGen rng(stm_now() | (stm_now() << 32));
+	random::GameRandGen rng(stm_now() | (stm_now() << 24));
 
 	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -61,7 +61,8 @@ int main(int argc, char* argv[])
 		CameraView,
 		SpriteRender,
 		GameMapRender,
-		GameCameraControl>();
+		GameCameraControl,
+		EnemyTag>();
 
 	auto expirationSystem = world.RegisterSystem<EntityExpirationSystem, Expiration>();
 	auto viewSystem = world.RegisterSystem<ViewSystem, Transform, CameraView>();
@@ -73,8 +74,11 @@ int main(int argc, char* argv[])
 	auto spriteRenderSystem = world.RegisterSystem<SpriteRenderSystem, Transform, SpriteRender>();
 	auto gameMapRenderSystem = world.RegisterSystem<GameMapRenderSystem, Transform, GameMapRender>();
 	auto cameraControlSystem = world.RegisterSystem<GameCameraControlSystem, Transform, CameraView, GameCameraControl>();
+	auto enemyFollowSystem = world.RegisterSystem<EnemyFollowTargetSystem, Transform, Velocity, EnemyTag>();
 
 	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
+
+	enemyFollowSystem->targetEntity = playerEntity;
 
 	world.AddComponents(cameraEntity,
 		Transform{},
@@ -105,7 +109,9 @@ int main(int argc, char* argv[])
 	{
 		world.AddComponents(enemy,
 			Transform{ {rng.RangeF(1.0f, 31.0f), rng.RangeF(1.0f, 15.0f)} },
-			SpriteRender{320, SpriteFlipFlags::None, vec2::Half});
+			Velocity{},
+			SpriteRender{ 320, SpriteFlipFlags::None, vec2::Half },
+			EnemyTag{});
 	}
 
 	StringReport report = StrId::QueryStringReport();
@@ -184,6 +190,7 @@ int main(int argc, char* argv[])
 		gatherInputSystem->Update(gameTime);
 		playerControlSystem->Update(gameTime);
 		playerShootSystem->Update(gameTime);
+		enemyFollowSystem->Update(gameTime);
 		spriteFacingSystem->Update();
 		moverSystem->Update(gameTime);
 		cameraControlSystem->Update(gameTime);

@@ -18,9 +18,14 @@ namespace random
 	class RandomGen
 	{
 	public:
-		explicit RandomGen(Base seed)
+		explicit RandomGen(RND_U32 seed)
 		{
-			SeedFunc(&rng, seed);
+			SeedFunc(&rng, static_cast<Base>(seed));
+		}
+
+		explicit RandomGen(RND_U64 seed)
+		{
+			SeedFunc(&rng, static_cast<Base>(seed));
 		}
 
 		Base Next() { return NextFunc(&rng); }
