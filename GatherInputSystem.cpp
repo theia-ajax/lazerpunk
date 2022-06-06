@@ -1,6 +1,7 @@
-#include "systems.h"
-#include "input.h"
+#include "GatherInputSystem.h"
 #include <SDL2/SDL.h>
+#include "components.h"
+#include "input.h"
 
 namespace
 {

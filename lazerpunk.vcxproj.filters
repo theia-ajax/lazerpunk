@@ -8,75 +8,171 @@
     <Filter Include="Assets">
       <UniqueIdentifier>{b7b28301-2d74-4951-ade4-2cc35d542574}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Components">
+      <UniqueIdentifier>{ad578fbb-b9ec-484d-b594-be1d60dc82ce}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Systems">
+      <UniqueIdentifier>{aef1319a-45d6-4393-843c-d6a6aad04c9d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Systems\Common">
+      <UniqueIdentifier>{abdd65a7-f3b9-42f6-bc36-602cab91e2df}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Systems\Core">
+      <UniqueIdentifier>{f25f0bec-2d02-4eb5-9901-417fc30f8646}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Systems\Game">
+      <UniqueIdentifier>{b4195b9b-ae01-40ae-9996-76cde17f4ee5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Core">
+      <UniqueIdentifier>{958d0515-a166-432b-9a7a-ebe0d04039cb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\External">
+      <UniqueIdentifier>{d960fee3-1010-468e-b0b4-00883e88ee57}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Game">
+      <UniqueIdentifier>{8613ca9b-26e0-415a-9816-79a8e2d318f2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Systems\Game\Input">
+      <UniqueIdentifier>{dac57f6d-66cc-433d-a939-1e2a812e5d2f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Systems\Game\Drawing">
+      <UniqueIdentifier>{6fe5ea0c-59bb-4122-91d1-0aaa6b7827a9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Systems\Game\Controllers">
+      <UniqueIdentifier>{f2cd7bb9-7413-4382-a8f4-941a795c8231}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="impl.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="sprites.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="stringid.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="gamemap.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="draw.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="inputsystems.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Core</Filter>
     </ClCompile>
     <ClCompile Include="input.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="draw.cpp">
+      <Filter>Source Files\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="gamemap.cpp">
+      <Filter>Source Files\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="impl.cpp">
+      <Filter>Source Files\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="sprites.cpp">
+      <Filter>Source Files\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="MoverSystem.cpp">
+      <Filter>Source Files\Systems\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="EntityExpirationSystem.cpp">
+      <Filter>Source Files\Systems\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="GatherInputSystem.cpp">
+      <Filter>Source Files\Systems\Game\Input</Filter>
+    </ClCompile>
+    <ClCompile Include="GameCameraControlSystem.cpp">
+      <Filter>Source Files\Systems\Game\Controllers</Filter>
+    </ClCompile>
+    <ClCompile Include="PlayerControlSystem.cpp">
+      <Filter>Source Files\Systems\Game\Controllers</Filter>
+    </ClCompile>
+    <ClCompile Include="PlayerShootControlSystem.cpp">
+      <Filter>Source Files\Systems\Game\Controllers</Filter>
+    </ClCompile>
+    <ClCompile Include="ViewSystem.cpp">
+      <Filter>Source Files\Systems\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="SpriteFacingSystem.cpp">
+      <Filter>Source Files\Systems\Game\Drawing</Filter>
+    </ClCompile>
+    <ClCompile Include="SpriteRenderSystem.cpp">
+      <Filter>Source Files\Systems\Game\Drawing</Filter>
+    </ClCompile>
+    <ClCompile Include="GameMapRenderSystem.cpp">
+      <Filter>Source Files\Systems\Game\Drawing</Filter>
+    </ClCompile>
+    <ClCompile Include="EnemyFollowTargetSystem.cpp">
+      <Filter>Source Files\Systems\Game\Controllers</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="types.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="sprites.h">
-      <Filter>Source Files</Filter>
+    <ClInclude Include="components.h">
+      <Filter>Source Files\Components</Filter>
     </ClInclude>
     <ClInclude Include="systems.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="enumflag.h">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Systems\Common</Filter>
     </ClInclude>
     <ClInclude Include="strpool.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="stringid.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="gamemap.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="draw.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ecs.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="components.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="input.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="rnd.h">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\External</Filter>
     </ClInclude>
     <ClInclude Include="sysfont.h">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\External</Filter>
+    </ClInclude>
+    <ClInclude Include="enumflag.h">
+      <Filter>Source Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="rnd.h">
+      <Filter>Source Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="stringid.h">
+      <Filter>Source Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="types.h">
+      <Filter>Source Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="ecs.h">
+      <Filter>Source Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="input.h">
+      <Filter>Source Files\Core</Filter>
     </ClInclude>
     <ClInclude Include="random.h">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="draw.h">
+      <Filter>Source Files\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="gamemap.h">
+      <Filter>Source Files\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="sprites.h">
+      <Filter>Source Files\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="MoverSystem.h">
+      <Filter>Source Files\Systems\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="EntityExpirationSystem.h">
+      <Filter>Source Files\Systems\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="GatherInputSystem.h">
+      <Filter>Source Files\Systems\Game\Input</Filter>
+    </ClInclude>
+    <ClInclude Include="GameCameraControlSystem.h">
+      <Filter>Source Files\Systems\Game\Controllers</Filter>
+    </ClInclude>
+    <ClInclude Include="PlayerControlSystem.h">
+      <Filter>Source Files\Systems\Game\Controllers</Filter>
+    </ClInclude>
+    <ClInclude Include="PlayerShootControlSystem.h">
+      <Filter>Source Files\Systems\Game\Controllers</Filter>
+    </ClInclude>
+    <ClInclude Include="ViewSystem.h">
+      <Filter>Source Files\Systems\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="SpriteFacingSystem.h">
+      <Filter>Source Files\Systems\Game\Drawing</Filter>
+    </ClInclude>
+    <ClInclude Include="SpriteRenderSystem.h">
+      <Filter>Source Files\Systems\Game\Drawing</Filter>
+    </ClInclude>
+    <ClInclude Include="GameMapRenderSystem.h">
+      <Filter>Source Files\Systems\Game\Drawing</Filter>
+    </ClInclude>
+    <ClInclude Include="EnemyFollowTargetSystem.h">
+      <Filter>Source Files\Systems\Game\Controllers</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

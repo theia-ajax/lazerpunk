@@ -64,6 +64,9 @@ namespace math
 	{
 		return lerp(current, target, 1.0f - expf(-lambda * dt));
 	}
+
+	template <typename T>
+	T Sign(const T& v) { return (v > static_cast<T>(0)) ? static_cast<T>(1) : ((v < static_cast<T>(0)) ? static_cast<T>(-1) : static_cast<T>(0)); }
 }
 
 // Just use this with default-constructable, trivially copyable types
@@ -172,6 +175,11 @@ namespace vec2
 		return (a + b) / 2.0f;
 	}
 
+	inline float LengthSqr(const Vec2& v)
+	{
+		return v.x * v.x + v.y * v.y;
+	}
+
 	inline float Length(const Vec2& v)
 	{
 		return sqrtf(v.x * v.x + v.y * v.y);
@@ -238,6 +246,8 @@ constexpr Vec2 DirectionVector(Direction direction)
 	};
 	return moveVectors[static_cast<int>(direction)];
 }
+
+constexpr bool IsDirectionVert(Direction direction) { return direction == Direction::Up || direction == Direction::Down; }
 
 struct Bounds2D
 {

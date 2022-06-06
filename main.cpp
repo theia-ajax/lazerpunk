@@ -1,15 +1,14 @@
-
-#include "types.h"
+#include <array>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
-#include "sokol_time.h"
-#include "input.h"
+#include "components.h"
 #include "draw.h"
 #include "ecs.h"
-#include "components.h"
-#include "systems.h"
+#include "input.h"
 #include "random.h"
-#include <array>
+#include "sokol_time.h"
+#include "systems.h"
+#include "types.h"
 
 World world;
 
@@ -104,7 +103,7 @@ int main(int argc, char* argv[])
 		FacingSprites{ 1043, 1042, 1041 },
 		SpriteRender{ 1043, SpriteFlipFlags::None, vec2::Half });
 
-	auto enemyEntities = world.CreateEntities<10>();
+	auto enemyEntities = world.CreateEntities<20>();
 	for (Entity enemy : enemyEntities)
 	{
 		world.AddComponents(enemy,

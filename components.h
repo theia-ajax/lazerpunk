@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include "ecs.h"
 #include "sprites.h"
 #include "gamemap.h"
 
@@ -96,7 +97,7 @@ struct GameMapRender
 
 struct GameCameraControl
 {
-	GameMapHandle clampViewMap;
-	Entity followTarget;
+	GameMapHandle clampViewMap{};
+	Entity followTarget{};
 	Bounds2D followBounds;
 };
