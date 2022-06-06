@@ -35,7 +35,7 @@ struct PlayerControlSystem : System
 				input.requestDash = false;
 				if (Length(control.dashVelocity) < 0.1f)
 				{
-					control.dashVelocity = DirectionVelocity(facing) * 25.0f;
+					control.dashVelocity = DirectionVector(facing) * 25.0f;
 				}
 			}
 
@@ -72,13 +72,27 @@ struct PlayerShootControlSystem : System
 				{
 					shootControl.cooldownRemaining += shootControl.cooldownSec;
 
+					Vec2 bulletVel = DirectionVector(facing.facing) * 25;
+					SpriteFlipFlags flags{};
+					switch (facing.facing)
+					{
+					case Direction::Left:
+						flags = SpriteFlipFlags::FlipDiag;
+						break;
+					case Direction::Right:
+						flags = SpriteFlipFlags::FlipDiag | SpriteFlipFlags::FlipX;
+						break;
+					case Direction::Down:
+						flags = SpriteFlipFlags::FlipY;
+						break;
+					}
 					Entity bulletEntity = GetWorld().CreateEntity();
 					GetWorld().AddComponents(bulletEntity,
-							Transform{{transform.position}},
-							Velocity{vec2::UnitX},
-							Facing{facing.facing},
-							SpriteRender{644},
-							Expiration{2.0f});
+						Transform{ {transform.position} },
+						Velocity{ bulletVel },
+						Facing{ facing.facing },
+						SpriteRender{ 664, flags, vec2::Half },
+						Expiration{ 1.0f });
 				}
 			}
 		}
@@ -175,16 +189,16 @@ private:
 	Camera activeCamera{};
 };
 
-struct CameraFollowSystem final : System
+struct GameCameraControlSystem : System
 {
 	void SnapFocusToFollow(Entity cameraEntity) const
 	{
-		auto [transform, view, follow] = GetWorld().GetComponents<Transform, CameraView, CameraFollowEntity>(cameraEntity);
+		auto [transform, view, camera] = GetWorld().GetComponents<Transform, CameraView, GameCameraControl>(cameraEntity);
 
-		if (!follow.target)
+		if (!camera.followTarget)
 			return;
 
-		const auto& [position, _, __] = GetWorld().GetComponent<Transform>(follow.target);
+		const auto& [position, _, __] = GetWorld().GetComponent<Transform>(camera.followTarget);
 
 		transform.position = position - view.extents / 2 / view.scale;
 		view.center = position;
@@ -194,23 +208,31 @@ struct CameraFollowSystem final : System
 	{
 		for (Entity entity : entities)
 		{
-			auto [transform, view, follow] = GetWorld().GetComponents<Transform, CameraView, CameraFollowEntity>(entity);
+			auto [transform, view, camera] = GetWorld().GetComponents<Transform, CameraView, GameCameraControl>(entity);
 
-			if (follow.target == kInvalidEntity)
-				continue;
+			if (camera.followTarget)
+			{
+				const auto& targetTransform = GetWorld().GetComponent<Transform>(camera.followTarget);
 
-			const auto& targetTransform = GetWorld().GetComponent<Transform>(follow.target);
+				auto [dx, dy] = targetTransform.position - view.center;
 
-			auto [dx, dy] = targetTransform.position - view.center;
+				if (dx < camera.followBounds.Left())
+					transform.position.x += dx - camera.followBounds.Left();
+				if (dx > camera.followBounds.Right())
+					transform.position.x += dx - camera.followBounds.Right();
+				if (dy < camera.followBounds.Top())
+					transform.position.y += dy - camera.followBounds.Top();
+				if (dy > camera.followBounds.Bottom())
+					transform.position.y += dy - camera.followBounds.Bottom();
+			}
 
-			if (dx < follow.bounds[0].x)
-				transform.position.x += dx - follow.bounds[0].x;
-			if (dx > follow.bounds[1].x)
-				transform.position.x += dx - follow.bounds[1].x;
-			if (dy < follow.bounds[0].y)
-				transform.position.y += dy - follow.bounds[0].y;
-			if (dy > follow.bounds[1].y)
-				transform.position.y += dy - follow.bounds[1].y;
+			if (camera.clampViewMap)
+			{
+				const auto& gameMap = map::Get(camera.clampViewMap);
+				Bounds2D viewBounds = gameMap.worldBounds;
+				viewBounds.max = viewBounds.max - camera_view::WorldExtents(view);
+				transform.position = viewBounds.ClampPoint(transform.position);
+			}
 		}
 	}
 };
@@ -245,9 +267,12 @@ struct GameMapRenderSystem : System
 		const auto& viewSystem = GetWorld().GetSystem<ViewSystem>();
 		for (Entity entity : entities)
 		{
-			const auto& [mapHandle] = GetWorld().GetComponent<GameMapRef>(entity);
-			const auto& map = map::Get(mapHandle);
-			map::DrawLayers<N>(ctx, map, viewSystem->ActiveCamera(), ctx.sheet, layers);
+			auto [transform, mapRender] = GetWorld().GetComponents<Transform, GameMapRender>(entity);
+			if (mapRender.mapHandle)
+			{
+				const auto& map = map::Get(mapRender.mapHandle);
+				map::DrawLayers<N>(ctx, map, viewSystem->ActiveCamera(), ctx.sheet, layers);
+			}
 		}
 	}
 };

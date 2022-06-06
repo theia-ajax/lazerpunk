@@ -8,6 +8,7 @@
 #include "ecs.h"
 #include "components.h"
 #include "systems.h"
+#include "random.h"
 #include <array>
 
 World world;
@@ -24,12 +25,15 @@ struct SpriteSheetViewContext
 
 void SpriteSheetViewControl(SpriteSheetViewContext& ssv);
 void SpriteSheetViewRender(const DrawContext& ctx, const SpriteSheetViewContext& ssv);
+void PrintStringReport(const StringReport& report);
 
 int main(int argc, char* argv[])
 {
 	stm_setup();
 	TTF_Init();
 	TTF_Font* debugFont = TTF_OpenFont("assets/PressStart2P-Regular.ttf", 8);
+
+	random::XorShiftGen rng(stm_now() | (stm_now() << 32));
 
 	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -54,10 +58,10 @@ int main(int argc, char* argv[])
 		PlayerShootControl,
 		Facing,
 		FacingSprites,
-		GameMapRef,
 		CameraView,
 		SpriteRender,
-		CameraFollowEntity>();
+		GameMapRender,
+		GameCameraControl>();
 
 	auto expirationSystem = world.RegisterSystem<EntityExpirationSystem, Expiration>();
 	auto viewSystem = world.RegisterSystem<ViewSystem, Transform, CameraView>();
@@ -67,32 +71,47 @@ int main(int argc, char* argv[])
 	auto spriteFacingSystem = world.RegisterSystem<SpriteFacingSystem, Facing, FacingSprites, SpriteRender>();
 	auto moverSystem = world.RegisterSystem<MoverSystem, Transform, Velocity>();
 	auto spriteRenderSystem = world.RegisterSystem<SpriteRenderSystem, Transform, SpriteRender>();
-	auto gameMapRenderSystem = world.RegisterSystem<GameMapRenderSystem, Transform, GameMapRef>();
-	auto cameraFollowSystem = world.RegisterSystem<CameraFollowSystem, Transform, CameraView, CameraFollowEntity>();
+	auto gameMapRenderSystem = world.RegisterSystem<GameMapRenderSystem, Transform, GameMapRender>();
+	auto cameraControlSystem = world.RegisterSystem<GameCameraControlSystem, Transform, CameraView, GameCameraControl>();
 
 	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
 
 	world.AddComponents(cameraEntity,
 		Transform{},
 		CameraView{ viewExtents },
-		CameraFollowEntity{ playerEntity, {{-2, -0.75f}, {2, 0.75f}} });
+		GameCameraControl{ map, playerEntity, {{-2, -0.75f}, {2, 0.75f}} });
+
+	static_stack<uint8_t, 4> bytes = {
+		1, 2, 3
+	};
 
 	world.AddComponents(mapEntity,
 		Transform{},
-		GameMapRef{ map });
+		GameMapRender{ map });
 
 	world.AddComponents(playerEntity,
 		Transform{ {8, 5} },
 		GameInput{},
 		GameInputGather{},
 		PlayerControl{},
-		PlayerShootControl{0.077f},
+		PlayerShootControl{ 0.15f },
 		Facing{ Direction::Right },
 		Velocity{},
 		FacingSprites{ 1043, 1042, 1041 },
-		SpriteRender{1043, SpriteFlipFlags::None, vec2::Half});
+		SpriteRender{ 1043, SpriteFlipFlags::None, vec2::Half });
 
-	cameraFollowSystem->SnapFocusToFollow(cameraEntity);
+	auto enemyEntities = world.CreateEntities<10>();
+	for (Entity enemy : enemyEntities)
+	{
+		world.AddComponents(enemy,
+			Transform{ {rng.RangeF(1.0f, 31.0f), rng.RangeF(1.0f, 15.0f)} },
+			SpriteRender{320, SpriteFlipFlags::None, vec2::Half});
+	}
+
+	StringReport report = StrId::QueryStringReport();
+	PrintStringReport(report);
+
+	cameraControlSystem->SnapFocusToFollow(cameraEntity);
 
 	constexpr double kTargetFrameTime = 0.0;
 	constexpr double kFixedTimeStepSec = 1.0 / 60.0;
@@ -167,7 +186,7 @@ int main(int argc, char* argv[])
 		playerShootSystem->Update(gameTime);
 		spriteFacingSystem->Update();
 		moverSystem->Update(gameTime);
-		cameraFollowSystem->Update(gameTime);
+		cameraControlSystem->Update(gameTime);
 		viewSystem->Update(gameTime);
 
 		SpriteSheetViewControl(ssv);
@@ -181,6 +200,8 @@ int main(int argc, char* argv[])
 		SDL_RenderPresent(renderer);
 
 		++frameCountThisSecond;
+
+		printf("Entities: %04u\r", world.GetEntityCount());
 
 		if constexpr (kTargetFrameTime > 0)
 		{
@@ -274,5 +295,19 @@ namespace internal
 	void PrintAssert(const char* function, int lineNum, const char* exprStr)
 	{
 		printf("ASSERT FAILED (%s) in %s:%d\n", exprStr, function, lineNum);
+	}
+}
+
+void PrintStringReport(const StringReport& report)
+{
+
+	printf("String Report:\n");
+	printf("\tBlock Memory: %d\n", report.blockSize * report.blockCapacity);
+	printf("\tBlock Usage: %d\n", report.blockSize * report.blockCount);
+	printf("\tEntries: %d / %d\n", report.entryCount, report.entryCapacity);
+	printf("\tStored strings:\n");
+	for (const auto& s : report.strings)
+	{
+		printf("\t\t%s\n", s.c_str());
 	}
 }

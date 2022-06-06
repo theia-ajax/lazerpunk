@@ -18,6 +18,11 @@ struct CameraView
 	Vec2 center{};
 };
 
+namespace camera_view
+{
+	inline Vec2 WorldExtents(const CameraView& view) { return view.extents / view.scale; }
+}
+
 struct GameInputGather
 {
 	enum_array<bool, Direction> moveDown{};
@@ -74,13 +79,14 @@ struct SpriteRender
 	Vec2 origin{};
 };
 
-struct GameMapRef
+struct GameMapRender
 {
 	GameMapHandle mapHandle;
 };
 
-struct CameraFollowEntity
+struct GameCameraControl
 {
-	Entity target;
-	Vec2 bounds[2];
+	GameMapHandle clampViewMap;
+	Entity followTarget;
+	Bounds2D followBounds;
 };

@@ -69,6 +69,15 @@
     <ClInclude Include="input.h">
       <Filter>Source Files</Filter>
     </ClInclude>
+    <ClInclude Include="rnd.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="sysfont.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="random.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\spritesheet.tsj">

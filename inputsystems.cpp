@@ -35,7 +35,7 @@ void GatherInputSystem::Update(const GameTime& time) const
 			}
 		}
 
-		gameInput.moveInput = DirectionVelocity(direction);
+		gameInput.moveInput = DirectionVector(direction);
 		gameInput.direction = direction;
 
 		if (input::GetKeyDown(SDL_SCANCODE_X))

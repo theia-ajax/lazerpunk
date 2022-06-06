@@ -2,6 +2,17 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
+
+struct StringReport
+{
+	int blockSize;
+	int blockCapacity;
+	int blockCount;
+	int entryCapacity;
+	int entryCount;
+	std::vector<std::string> strings{};
+};
 
 class StrId
 {
@@ -12,13 +23,15 @@ public:
 
 	constexpr StrId() : StrId(kEmptyRaw) {}
 	constexpr explicit StrId(RawType rawId);
-	explicit StrId(const char* str);
+	StrId(const char* str);
 	StrId(const char* str, size_t len);
-	explicit StrId(const std::string& str);
+	StrId(const std::string& str);
 
 	const char* CStr() const;
 	constexpr bool IsEmpty() const { return RawValue() == kEmptyRaw; }
 	constexpr RawType RawValue() const { return rawValue; };
+
+	static StringReport QueryStringReport();
 
 public:
 	static const StrId kEmpty;

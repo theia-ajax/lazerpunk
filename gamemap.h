@@ -85,10 +85,19 @@ struct GameMapGroupLayer : GameMapLayerCommon
 struct GameMap
 {
 	StrId assetPathId;
+	int tileWidth{};
+	int tileHeight{};
+	int tileCountX{};
+	int tileCountY{};
+	Bounds2D worldBounds;
 	std::vector<GameMapLayer> layers;
 };
 
-struct GameMapHandle { uint32_t handle; };
+struct GameMapHandle
+{
+	uint32_t handle;
+	constexpr explicit operator bool() const { return handle != 0; }
+};
 constexpr bool operator==(const GameMapHandle& a, const GameMapHandle& b) { return a.handle == b.handle; }
 constexpr bool operator!=(const GameMapHandle& a, const GameMapHandle& b) { return a.handle != b.handle; }
 

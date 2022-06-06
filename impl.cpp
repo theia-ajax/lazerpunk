@@ -8,3 +8,8 @@
 #define STRPOOL_U64 uint64_t
 #define STRPOOL_IMPLEMENTATION
 #include "strpool.h"
+
+#define RND_U32 uint32_t
+#define RND_U64 uint64_t
+#define RND_IMPLEMENTATION
+#include "rnd.h"

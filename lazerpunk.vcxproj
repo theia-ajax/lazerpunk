@@ -170,6 +170,9 @@
     <ClInclude Include="ecs.h" />
     <ClInclude Include="enumflag.h" />
     <ClInclude Include="input.h" />
+    <ClInclude Include="random.h" />
+    <ClInclude Include="rnd.h" />
+    <ClInclude Include="sysfont.h" />
     <ClInclude Include="systems.h" />
     <ClInclude Include="gamemap.h" />
     <ClInclude Include="sprites.h" />

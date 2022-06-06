@@ -76,9 +76,14 @@ public:
 		return signatures[entity];
 	}
 
+	Entity GetEntityCount() const
+	{
+		return kMaxEntities - static_cast<Entity>(availableEntities.size());
+	}
+
 private:
 	std::queue<Entity> availableEntities{};
-	std::array<Signature, kMaxEntities> signatures{};
+	std::array<Signature, kMaxEntities + 1> signatures{};
 };
 
 class IComponentArray
@@ -263,7 +268,7 @@ class SystemManager
 	}
 
 public:
-	template <typename T>
+	template <typename T, std::enable_if_t<std::is_base_of_v<System, T>, bool> = true>
 	std::shared_ptr<T> RegisterSystem(World* world)
 	{
 		SystemId systemId = GetSystemId<T>();
@@ -361,6 +366,14 @@ public:
 	std::array<Entity, N> CreateEntities()
 	{
 		return entityManager.CreateEntities<N>();
+	}
+
+	std::vector<Entity> CreateEntities(size_t entityCount)
+	{
+		std::vector<Entity> result;
+		for (size_t i = 0; i < entityCount; ++i)
+			result.emplace_back(entityManager.CreateEntity());
+		return result;
 	}
 
 	void DestroyEntity(Entity entity)
@@ -473,6 +486,8 @@ public:
 	{
 		return componentManager.BuildSignature<Components...>();
 	}
+
+	Entity GetEntityCount() const { return entityManager.GetEntityCount(); }
 
 private:
 	template <typename Head, typename... Tail>

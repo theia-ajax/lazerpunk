@@ -6,6 +6,24 @@
 
 namespace
 {
+	struct CollatedStrPool
+	{
+		const strpool_t* pool;
+		char* collated;
+		int count;
+
+		explicit CollatedStrPool(const strpool_t* pool)
+			: pool(pool)
+		{
+			collated = strpool_collate(pool, &count);
+		}
+
+		~CollatedStrPool()
+		{
+			strpool_free_collated(pool, collated);
+		}
+	};
+
 	struct StrPool
 	{
 		StrPool() = default;
@@ -18,6 +36,8 @@ namespace
 
 		StrId::RawType Inject(const char* str, size_t len);
 		const char* CStr(const StrId& strId) const;
+		CollatedStrPool Collate() const;
+		constexpr const strpool_t* Raw() const { return &pool; }
 
 		strpool_t pool{};
 	};
@@ -40,6 +60,11 @@ namespace
 	const char* StrPool::CStr(const StrId& strId) const
 	{
 		return (strId.IsEmpty()) ? "" : strpool_cstr(&pool, strId.RawValue());
+	}
+
+	CollatedStrPool StrPool::Collate() const
+	{
+		return CollatedStrPool(&pool);
 	}
 
 	StrPool g_StringPool;
@@ -84,3 +109,27 @@ StrId::StrId(const std::string& str) : StrId(str.c_str(), str.length()) {}
 
 const char* StrId::CStr() const { return GetStrPool().CStr(*this); }
 
+StringReport StrId::QueryStringReport()
+{
+	CollatedStrPool collated = GetStrPool().Collate();
+	const strpool_t* pool = GetStrPool().Raw();
+
+
+	StringReport result{};
+
+	result.entryCapacity = pool->entry_capacity;
+	result.entryCount = pool->entry_count;
+	result.blockSize = pool->block_size;
+	result.blockCount = pool->block_count;
+	result.blockCapacity = pool->block_capacity;
+
+	const char* current = collated.collated;
+	while (current && result.strings.size() < static_cast<unsigned>(collated.count))
+	{
+		result.strings.emplace_back(current);
+		size_t len = strlen(current) + 1;
+		current += len;
+	}
+
+	return result;
+}

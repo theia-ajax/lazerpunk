@@ -288,8 +288,18 @@ namespace
 		ASSERT(doc.HasMember("layers"));
 		ASSERT(doc["layers"].IsArray());
 		ASSERT(doc["layers"].Capacity() > 0);
+		ASSERT(doc.HasMember("tilewidth"));
+		ASSERT(doc.HasMember("tileheight"));
+		ASSERT(doc.HasMember("width"));
+		ASSERT(doc.HasMember("height"));
 
 		GameMap result{ StrId(fileName) };
+
+		result.tileCountX = doc["width"].GetInt();
+		result.tileCountY = doc["height"].GetInt();
+		result.tileWidth = doc["tilewidth"].GetInt();
+		result.tileHeight = doc["tileheight"].GetInt();
+		result.worldBounds = Bounds2D::FromDimensions(vec2::Zero, vec2::Create(result.tileCountX, result.tileCountY));
 
 		for (rapidjson::SizeType i = 0; i < doc["layers"].Capacity(); ++i)
 		{
@@ -306,7 +316,6 @@ namespace
 	{
 	public:
 		static constexpr uint32_t kMaxLoadedMaps = 64;
-		static constexpr GameMapHandle kInvalidHandle{ 0 };
 
 	public:
 		GameMapManager()
@@ -328,7 +337,7 @@ namespace
 
 		void Remove(GameMapHandle handle)
 		{
-			ASSERT(handle != kInvalidHandle && "Invalid handle");
+			ASSERT(handle && "Invalid handle");
 			ASSERT(handle.handle <= kMaxLoadedMaps && "Invalid handle");
 			GameMap& map = Get(handle);
 			mapHandlesByName.erase(map.assetPathId);
@@ -338,7 +347,7 @@ namespace
 
 		GameMap& Get(GameMapHandle handle)
 		{
-			ASSERT(handle != kInvalidHandle && "Invalid handle");
+			ASSERT(handle && "Invalid handle");
 			ASSERT(handle.handle <= kMaxLoadedMaps && "Invalid handle");
 			return mapsByHandle[handle.handle - 1];
 		}
