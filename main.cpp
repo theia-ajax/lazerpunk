@@ -62,8 +62,10 @@ int main(int argc, char* argv[])
 		GameMapRender,
 		GameCameraControl,
 		EnemyTag,
-		Collider,
-		DebugMarker>();
+		PhysicsBody,
+		Collider::Box, Collider::Circle,
+		DebugMarker,
+		PhysicsNudge>();
 
 	auto expirationSystem = world.RegisterSystem<EntityExpirationSystem, Expiration>();
 	auto viewSystem = world.RegisterSystem<ViewSystem, Transform, CameraView>();
@@ -71,17 +73,19 @@ int main(int argc, char* argv[])
 	auto playerControlSystem = world.RegisterSystem<PlayerControlSystem, GameInput, Transform, Facing, Velocity, PlayerControl>();
 	auto playerShootSystem = world.RegisterSystem<PlayerShootControlSystem, GameInput, Transform, Facing, Velocity, PlayerShootControl>();
 	auto spriteFacingSystem = world.RegisterSystem<SpriteFacingSystem, Facing, FacingSprites, SpriteRender>();
-	auto moverSystem = world.RegisterSystem<MoverSystem, Transform, Velocity>();
 	auto spriteRenderSystem = world.RegisterSystem<SpriteRenderSystem, Transform, SpriteRender>();
 	auto gameMapRenderSystem = world.RegisterSystem<GameMapRenderSystem, Transform, GameMapRender>();
 	auto cameraControlSystem = world.RegisterSystem<GameCameraControlSystem, Transform, CameraView, GameCameraControl>();
 	auto enemyFollowSystem = world.RegisterSystem<EnemyFollowTargetSystem, Transform, Velocity, EnemyTag>();
-	auto physicsSystem = world.RegisterSystem<PhysicsSystem, Transform, Velocity, Collider>();
-	auto debugMarkerSystem = world.RegisterSystem<DebugMarkerSystem, Transform, DebugMarker>();
+	auto nudgeSystem = PhysicsNudgeSystem::Register(world, SystemFlags::Monitor);
+	auto physicsSystem = world.RegisterSystem<PhysicsSystem, Transform, PhysicsBody, Collider::Box>();
+	auto debugMarkerSystem = world.RegisterSystem<DebugMarkerSystem, Transform, DebugMarker, Collider::Box>();
+
+	auto physicsBodyVelocitySystem = PhysicsBodyVelocitySystem::Register(world);
 
 	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
 
-	physicsSystem->mapHandle = map;
+	physicsSystem->SetMap(map);
 	enemyFollowSystem->targetEntity = playerEntity;
 
 	world.AddComponents(cameraEntity,
@@ -107,9 +111,11 @@ int main(int argc, char* argv[])
 		Velocity{},
 		FacingSprites{ 1043, 1042, 1041 },
 		SpriteRender{ 1043, SpriteFlipFlags::None, vec2::Half },
-		Collider{ Collider::Box{vec2::Zero, vec2::Half} });
+		Collider::Box{ vec2::Zero, vec2::One * 0.45f },
+		PhysicsBody{},
+		DebugMarker{});
 
-	auto enemyEntities = world.CreateEntities<20>();
+	auto enemyEntities = world.CreateEntities<25>();
 	for (Entity enemy : enemyEntities)
 	{
 		world.AddComponents(enemy,
@@ -117,7 +123,9 @@ int main(int argc, char* argv[])
 			Velocity{},
 			SpriteRender{ 320, SpriteFlipFlags::None, vec2::Half },
 			EnemyTag{},
-			Collider{Collider::Circle{vec2::Zero, 0.5f}});
+			PhysicsBody{},
+			PhysicsNudge{0.5f, 0.5f},
+			Collider::Box{vec2::Zero, vec2::One * 0.45f});
 	}
 
 	StringReport report = StrId::QueryStringReport();
@@ -176,7 +184,7 @@ int main(int argc, char* argv[])
 		uint64_t deltaTime = stm_laptime(&clock);
 		uint64_t elapsed = stm_diff(stm_now(), startTime);
 		double elapsedSec = stm_sec(elapsed);
-		double deltaSec = stm_sec(deltaTime);
+		double deltaSec = math::min(stm_sec(deltaTime), 1.0);
 
 		secondTimer -= deltaSec;
 		if (secondTimer <= 0.0)
@@ -198,8 +206,9 @@ int main(int argc, char* argv[])
 		playerShootSystem->Update(gameTime);
 		enemyFollowSystem->Update(gameTime);
 		spriteFacingSystem->Update();
+		physicsBodyVelocitySystem->Update(gameTime);
+		nudgeSystem->Update(gameTime);
 		physicsSystem->Update(gameTime);
-		moverSystem->Update(gameTime);
 		cameraControlSystem->Update(gameTime);
 		viewSystem->Update(gameTime);
 

@@ -39,6 +39,7 @@ namespace math
 	using std::lerp;
 	using std::expf;
 	using std::clamp;
+	using std::abs;
 
 	constexpr float Epsilon = FLT_EPSILON * 4;
 
@@ -174,6 +175,13 @@ namespace vec2
 		return Vec2{ static_cast<float>(x), static_cast<float>(y) };
 	}
 
+	inline bool ApproxEqual(const Vec2& a, const Vec2& b)
+	{
+		return math::ApproxEqual(a.x, b.x) && math::ApproxEqual(a.y, b.y);
+	}
+
+	inline bool ApproxZero(const Vec2& v) { return ApproxEqual(v, Zero); }
+
 	inline Vec2 Midpoint(const Vec2& a, const Vec2& b)
 	{
 		return (a + b) / 2.0f;
@@ -200,6 +208,18 @@ namespace vec2
 		return a.x * b.x + a.y * b.y;
 	}
 
+	inline Vec2 MoveTo(const Vec2& current, const Vec2& target, float rate)
+	{
+		Vec2 delta = target - current;
+		Vec2 step = Normalize(delta) * rate;
+		Vec2 result = current + step;
+
+		if (Dot(delta, target - result) <= 0)
+			result = target;
+
+		return result;
+	}
+
 	inline Vec2 Lerp(const Vec2& a, const Vec2& b, float t)
 	{
 		return Vec2{ math::lerp(a.x, b.x, t), math::lerp(a.y, b.y, t) };
@@ -220,6 +240,16 @@ namespace vec2
 			math::Damp(a.y, b.y, lambda, dt),
 		};
 	}
+
+	inline Vec2 Abs(const Vec2& v)
+	{
+		return Vec2{ std::fabs(v.x), std::fabs(v.y) };
+	}
+
+	inline std::pair<Vec2, Vec2> UnitVectors(const Vec2& v)
+	{
+		return { {v.x, 0}, {0, v.y} };
+	}
 }
 
 
@@ -227,6 +257,12 @@ struct Color
 {
 	uint8_t r, g, b, a;
 };
+
+namespace color
+{
+	constexpr Color RGB(uint8_t r, uint8_t g, uint8_t b) { return { r, g, b, 255 }; }
+	constexpr Color RGBA(uint8_t r, uint8_t g, uint8_t b, uint8_t a) { return { r, g, b, a }; }
+}
 
 struct SDL_Renderer;
 
@@ -276,9 +312,19 @@ struct Bounds2D
 		};
 	}
 
+	constexpr std::array<Vec2, 4> Corners() const
+	{
+		return { min, {max.x, min.y}, max, {min.x, max.y}, };
+	}
+
 	static constexpr Bounds2D FromDimensions(Vec2 offset, Vec2 dimensions)
 	{
 		return Bounds2D{ offset, offset + dimensions };
+	}
+
+	static Bounds2D FromCenter(Vec2 center, Vec2 extents)
+	{
+		return Bounds2D{ center - extents, center + extents };
 	}
 };
 

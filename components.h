@@ -48,6 +48,11 @@ struct Velocity
 	Vec2 velocity{};
 };
 
+struct PhysicsBody
+{
+	Vec2 velocity{};
+};
+
 struct Expiration
 {
 	float secRemaining{};
@@ -107,20 +112,25 @@ struct Collider
 {
 	struct Box
 	{
-		Vec2 center;
-		Vec2 extents;
+		Vec2 center{};
+		Vec2 extents = vec2::Half;
 	};
 
 	struct Circle
 	{
-		Vec2 center;
-		float radius;
+		Vec2 center{};
+		float radius = 0.5f;
 	};
-
-	std::variant<Box, Circle> shape;
 };
 
 struct DebugMarker
 {
 	Color color{};
+};
+
+struct PhysicsNudge
+{
+	float radius = 0.5f;
+	float strength = 0.01f;
+	Vec2 velocity{};
 };

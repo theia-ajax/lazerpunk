@@ -8,8 +8,13 @@ struct GameMap;
 
 struct PhysicsSystem : System
 {
-	GameMapHandle mapHandle{};
+	void SetMap(GameMapHandle mapHandle);
 	void Update(const GameTime& time) const;
-	bool MapSolid(GameMap& map, const Vec2& point) const;
+	bool MapSolid(const Vec2& point) const;
+
+private:
+	GameMapHandle activeMapHandle{};
+	std::optional<std::reference_wrapper<GameMap>> activeMap;
+	std::optional< std::reference_wrapper<GameMapTileLayer>> activeSolidLayer;
 };
 

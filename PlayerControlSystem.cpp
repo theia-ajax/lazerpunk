@@ -36,28 +36,30 @@ void PlayerControlSystem::Update(const GameTime& time) const
 			control.dashVelocity = Normalize(control.dashVelocity) * newDashMag;
 		}
 
-		velocity = control.velocity + control.dashVelocity;
+		Vec2 newVelocity = control.velocity + control.dashVelocity;
 
 		if (input.direction != Direction::Invalid)
 		{
 			facing = input.direction;
 
 			float posRefComp = transform.position.y;
-			float velRefComp = velocity.x;
-			float* velTargetComp = &velocity.y;
+			float velRefComp = input.moveInput.x;
+			float* velTargetComp = &newVelocity.y;
 
 			if (IsDirectionVert(input.direction))
 			{
 				posRefComp = transform.position.x;
-				velRefComp = velocity.y;
-				velTargetComp = &velocity.x;
+				velRefComp = input.moveInput.y;
+				velTargetComp = &newVelocity.x;
 			}
 
 			float current = posRefComp;
-			float moveMag = abs(velRefComp) / 4;
+			float moveMag = abs(velRefComp) / 16;
 			float target = round((current - 0.5f) * 2) / 2 + 0.5f;
-			float deltaDiff = (target - current) / time.dt();
-			*velTargetComp += min(moveMag, abs(deltaDiff)) * Sign(deltaDiff);
+			float deltaDiff = (target - current);
+			*velTargetComp += min(moveMag, abs(deltaDiff)) * Sign(deltaDiff) / time.dt();
 		}
+
+		velocity = newVelocity;
 	}
 }

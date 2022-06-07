@@ -393,9 +393,9 @@ GameMap& map::Get(GameMapHandle handle)
 	return mapManager.Get(handle);
 }
 
-std::optional<GameMapLayer> map::GetLayer(GameMap& map, const char* layerName)
+std::optional<std::reference_wrapper<GameMapLayer>> map::GetLayer(GameMap& map, const char* layerName)
 {
-	static_stack<GameMapLayer, 32> layerStack{};
+	std::stack<std::reference_wrapper<GameMapLayer>> layerStack;
 	for (auto& layer : map.layers)
 		layerStack.push(layer);
 
@@ -403,23 +403,28 @@ std::optional<GameMapLayer> map::GetLayer(GameMap& map, const char* layerName)
 
 	while (!layerStack.empty())
 	{
-		GameMapLayer& layer = layerStack.top();
+		auto& layer = layerStack.top();
 
 		if (StrId layerNameId = GetLayerNameId(layer); layerNameId == searchId)
 			return layer;
 
-		auto subLayers = std::visit([](auto&& arg) -> std::vector<GameMapLayer>
+		auto subLayers = std::visit([](auto&& arg) -> std::vector<std::reference_wrapper<GameMapLayer>>
 			{
 				using T = std::decay_t<decltype(arg)>;
+				std::vector<std::reference_wrapper<GameMapLayer>> r;
 				if constexpr (std::is_same_v<T, GameMapGroupLayer>)
 				{
-					return static_cast<GameMapGroupLayer>(arg).layers;
+					auto& subLayers = arg.layers;
+					r.reserve(subLayers.size());
+					for (auto& subLayer : subLayers)
+						r.emplace_back(subLayer);
+					return r;
 				}
 				else
 				{
-					return std::vector<GameMapLayer>{};
+					return r;
 				}
-			}, layer);
+			}, layer.get());
 
 		layerStack.pop();
 

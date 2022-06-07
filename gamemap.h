@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "types.h"
 #include "sprites.h"
 #include <variant>
@@ -109,7 +111,33 @@ namespace map
 	GameMapHandle Load(const char* fileName);
 	void Reload(GameMapHandle handle);
 	GameMap& Get(GameMapHandle handle);
-	std::optional<GameMapLayer> GetLayer(GameMap& map, const char* layerName);
+	std::optional<std::reference_wrapper<GameMapLayer>> GetLayer(GameMap& map, const char* layerName);
+
+	template <typename, typename>
+	constexpr bool is_one_of_variants_types = false;
+
+	template <typename... Ts, typename T>
+	constexpr bool is_one_of_variants_types<std::variant<Ts...>, T>
+		= (std::is_same_v<T, Ts> || ...);
+
+	template <typename T>
+	auto GetLayer(GameMap& map, const char* layerName) -> std::enable_if_t<is_one_of_variants_types<GameMapLayer, T>, std::optional<std::reference_wrapper<T>>>
+	{
+		if (auto untypedLayer = GetLayer(map, layerName); untypedLayer.has_value())
+		{
+			return std::visit([](auto&& arg) -> std::optional<std::reference_wrapper<T>>
+				{
+					using LT = std::decay_t<decltype(arg)>;
+					if constexpr (std::is_same_v<T, LT>)
+					{
+						return std::ref(arg);
+					}
+					return {};
+
+				}, untypedLayer.value().get());
+		}
+		return {};
+	}
 
 	constexpr StrId GetLayerNameId(const GameMapLayer& layer)
 	{

@@ -9,12 +9,16 @@ void DebugMarkerSystem::DrawMarkers(const DrawContext& ctx) const
 
 	for (Entity entity : entities)
 	{
-		auto [transform, marker] = GetWorld().GetComponents<Transform, DebugMarker>(entity);
+		auto [transform, marker, box] = GetWorld().GetComponents<Transform, DebugMarker, Collider::Box>(entity);
 
 		if (marker.color.a > 0)
 		{
-			Vec2 screenPos = viewSystem->WorldToScreen(transform.position);
-			draw::Point(ctx, screenPos, marker.color);
+			Vec2 screenPos = viewSystem->WorldToScreen(transform.position + box.center);
+			Vec2 screenExtents = viewSystem->WorldScaleToScreen(box.extents);
+
+			Bounds2D colliderBounds = Bounds2D::FromCenter(screenPos, screenExtents);
+
+			draw::Rect(ctx, colliderBounds.min, colliderBounds.max, marker.color);
 		}
 	}
 }

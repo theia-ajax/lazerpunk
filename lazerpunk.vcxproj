@@ -166,7 +166,6 @@
     <ClCompile Include="input.cpp" />
     <ClCompile Include="GatherInputSystem.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="MoverSystem.cpp" />
     <ClCompile Include="PhysicsSystem.cpp" />
     <ClCompile Include="PlayerControlSystem.cpp" />
     <ClCompile Include="PlayerShootControlSystem.cpp" />
@@ -188,7 +187,6 @@
     <ClInclude Include="GameMapRenderSystem.h" />
     <ClInclude Include="GatherInputSystem.h" />
     <ClInclude Include="input.h" />
-    <ClInclude Include="MoverSystem.h" />
     <ClInclude Include="PhysicsSystem.h" />
     <ClInclude Include="PlayerControlSystem.h" />
     <ClInclude Include="PlayerShootControlSystem.h" />

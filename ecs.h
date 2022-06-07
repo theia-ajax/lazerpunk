@@ -256,14 +256,42 @@ private:
 	}
 };
 
-struct System
+enum class SystemFlags
 {
-	World& GetWorld() const { return *world; }
+	None = 0,
+	Monitor = 1 << 0,
+};
+
+struct System  // NOLINT(cppcoreguidelines-special-member-functions)
+{
+	virtual ~System();
+
+	World& GetWorld() const;
 	std::set<Entity> entities{};
 
 	friend class SystemManager;
+
+	virtual void OnEntityAdded(Entity entity);
+	virtual void OnEntityRemoved(Entity entity);
+
+	SystemFlags Flags() const;
+
 private:
 	World* world{};
+	SystemFlags flags = SystemFlags::None;
+};
+
+inline System::~System() = default;
+inline World& System::GetWorld() const { return *world; }
+inline SystemFlags System::Flags() const { return flags; }
+inline void System::OnEntityAdded(Entity entity) {}
+inline void System::OnEntityRemoved(Entity entity) {}
+
+
+template <typename T, typename... Components>
+struct TypedSystem : System
+{
+	static auto Register(World& world, SystemFlags systemFlags = SystemFlags::None);
 };
 
 class World;
@@ -280,7 +308,7 @@ class SystemManager
 
 public:
 	template <typename T, std::enable_if_t<std::is_base_of_v<System, T>, bool> = true>
-	std::shared_ptr<T> RegisterSystem(World* world)
+	std::shared_ptr<T> RegisterSystem(World* world, SystemFlags systemFlags = SystemFlags::None)
 	{
 		SystemId systemId = GetSystemId<T>();
 
@@ -288,7 +316,7 @@ public:
 
 		auto system = std::make_shared<T>();
 		system->world = world;
-
+		system->flags = systemFlags;
 		systems.insert({ systemId, system });
 		return system;
 	}
@@ -351,10 +379,21 @@ public:
 		{
 			if (const auto& systemSignature = signatures[systemId]; (entitySignature & systemSignature) == systemSignature)
 			{
+				if (system->Flags() != SystemFlags::None)
+				{
+					int p = 0;
+				}
+				if (flags::Test(system->Flags(), SystemFlags::Monitor) && !system->entities.contains(entity))
+					system->OnEntityAdded(entity);
+
 				system->entities.insert(entity);
+
 			}
 			else
 			{
+				if (flags::Test(system->Flags(), SystemFlags::Monitor) && system->entities.contains(entity))
+					system->OnEntityRemoved(entity);
+
 				system->entities.erase(entity);
 			}
 		}
@@ -472,9 +511,9 @@ public:
 	}
 
 	template <typename T, typename... Components>
-	std::shared_ptr<T> RegisterSystem()
+	std::shared_ptr<T> RegisterSystem(SystemFlags systemFlags = SystemFlags::None)
 	{
-		auto system = systemManager.RegisterSystem<T>(this);
+		auto system = systemManager.RegisterSystem<T>(this, systemFlags);
 		Signature signature = BuildSignature<Components...>();
 		SetSystemSignature<T>(signature);
 		return system;
@@ -561,3 +600,8 @@ private:
 	SystemManager systemManager;
 };
 
+template <typename T, typename ... Components>
+auto TypedSystem<T, Components...>::Register(World& world, SystemFlags systemFlags)
+{
+	return world.RegisterSystem<T, Components...>(systemFlags);
+}
