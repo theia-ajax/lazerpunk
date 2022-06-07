@@ -61,7 +61,9 @@ int main(int argc, char* argv[])
 		SpriteRender,
 		GameMapRender,
 		GameCameraControl,
-		EnemyTag>();
+		EnemyTag,
+		Collider,
+		DebugMarker>();
 
 	auto expirationSystem = world.RegisterSystem<EntityExpirationSystem, Expiration>();
 	auto viewSystem = world.RegisterSystem<ViewSystem, Transform, CameraView>();
@@ -74,9 +76,12 @@ int main(int argc, char* argv[])
 	auto gameMapRenderSystem = world.RegisterSystem<GameMapRenderSystem, Transform, GameMapRender>();
 	auto cameraControlSystem = world.RegisterSystem<GameCameraControlSystem, Transform, CameraView, GameCameraControl>();
 	auto enemyFollowSystem = world.RegisterSystem<EnemyFollowTargetSystem, Transform, Velocity, EnemyTag>();
+	auto physicsSystem = world.RegisterSystem<PhysicsSystem, Transform, Velocity, Collider>();
+	auto debugMarkerSystem = world.RegisterSystem<DebugMarkerSystem, Transform, DebugMarker>();
 
 	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
 
+	physicsSystem->mapHandle = map;
 	enemyFollowSystem->targetEntity = playerEntity;
 
 	world.AddComponents(cameraEntity,
@@ -101,7 +106,8 @@ int main(int argc, char* argv[])
 		Facing{ Direction::Right },
 		Velocity{},
 		FacingSprites{ 1043, 1042, 1041 },
-		SpriteRender{ 1043, SpriteFlipFlags::None, vec2::Half });
+		SpriteRender{ 1043, SpriteFlipFlags::None, vec2::Half },
+		Collider{ Collider::Box{vec2::Zero, vec2::Half} });
 
 	auto enemyEntities = world.CreateEntities<20>();
 	for (Entity enemy : enemyEntities)
@@ -110,7 +116,8 @@ int main(int argc, char* argv[])
 			Transform{ {rng.RangeF(1.0f, 31.0f), rng.RangeF(1.0f, 15.0f)} },
 			Velocity{},
 			SpriteRender{ 320, SpriteFlipFlags::None, vec2::Half },
-			EnemyTag{});
+			EnemyTag{},
+			Collider{Collider::Circle{vec2::Zero, 0.5f}});
 	}
 
 	StringReport report = StrId::QueryStringReport();
@@ -191,6 +198,7 @@ int main(int argc, char* argv[])
 		playerShootSystem->Update(gameTime);
 		enemyFollowSystem->Update(gameTime);
 		spriteFacingSystem->Update();
+		physicsSystem->Update(gameTime);
 		moverSystem->Update(gameTime);
 		cameraControlSystem->Update(gameTime);
 		viewSystem->Update(gameTime);
@@ -200,6 +208,7 @@ int main(int argc, char* argv[])
 		draw::Clear(drawContext);
 		gameMapRenderSystem->RenderLayers(drawContext, std::array{ StrId("Background") });
 		spriteRenderSystem->Render(drawContext);
+		debugMarkerSystem->DrawMarkers(drawContext);
 
 		SpriteSheetViewRender(drawContext, ssv);
 

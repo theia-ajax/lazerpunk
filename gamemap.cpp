@@ -8,6 +8,7 @@
 #include <SDL2/SDL.h>
 #include <unordered_map>
 #include <queue>
+#include <stack>
 
 namespace
 {
@@ -392,6 +393,44 @@ GameMap& map::Get(GameMapHandle handle)
 	return mapManager.Get(handle);
 }
 
+std::optional<GameMapLayer> map::GetLayer(GameMap& map, const char* layerName)
+{
+	static_stack<GameMapLayer, 32> layerStack{};
+	for (auto& layer : map.layers)
+		layerStack.push(layer);
+
+	StrId searchId = layerName;
+
+	while (!layerStack.empty())
+	{
+		GameMapLayer& layer = layerStack.top();
+
+		if (StrId layerNameId = GetLayerNameId(layer); layerNameId == searchId)
+			return layer;
+
+		auto subLayers = std::visit([](auto&& arg) -> std::vector<GameMapLayer>
+			{
+				using T = std::decay_t<decltype(arg)>;
+				if constexpr (std::is_same_v<T, GameMapGroupLayer>)
+				{
+					return static_cast<GameMapGroupLayer>(arg).layers;
+				}
+				else
+				{
+					return std::vector<GameMapLayer>{};
+				}
+			}, layer);
+
+		layerStack.pop();
+
+		for (auto& subLayer : subLayers)
+			layerStack.push(subLayer);
+
+	}
+
+	return {};
+}
+
 namespace
 {
 	struct BlendModeGuard  // NOLINT(cppcoreguidelines-special-member-functions)
@@ -501,14 +540,6 @@ namespace
 				}
 			}
 		}, layer);
-	}
-
-	constexpr StrId GetLayerNameId(GameMapLayer layer)
-	{
-		return std::visit([](auto&& arg) -> StrId
-			{
-				return arg.nameId;
-			}, layer);
 	}
 }
 

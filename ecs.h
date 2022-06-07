@@ -97,7 +97,7 @@ template <typename T>
 class ComponentArray final : public IComponentArray
 {
 public:
-	T& Insert(Entity entity, T component)
+	T& Insert(Entity entity, const T& component)
 	{
 		ASSERT(!entityToIndexMap.contains(entity) && "Component already added to entity.");
 
@@ -130,6 +130,11 @@ public:
 		indexToEntityMap.erase(indexOfLastElement);
 
 		size--;
+	}
+
+	bool Contains(Entity entity) const
+	{
+		return entityToIndexMap.contains(entity);
 	}
 
 	T& Get(Entity entity)
@@ -186,7 +191,7 @@ public:
 	}
 
 	template <typename T>
-	T& AddComponent(Entity entity, T component)
+	T& AddComponent(Entity entity, const T& component)
 	{
 		return GetComponentArray<T>()->Insert(entity, component);
 	}
@@ -195,6 +200,12 @@ public:
 	void RemoveComponent(Entity entity)
 	{
 		GetComponentArray<T>()->Remove(entity);
+	}
+
+	template <typename T>
+	bool HasComponent(Entity entity)
+	{
+		return GetComponentArray<T>()->Contains(entity);
 	}
 
 	template <typename T>
@@ -396,7 +407,7 @@ public:
 	}
 
 	template <typename T>
-	T& AddComponent(Entity entity, T component)
+	T& AddComponent(Entity entity, const T& component)
 	{
 		T& result = componentManager.AddComponent<T>(entity, component);
 
@@ -428,9 +439,24 @@ public:
 	}
 
 	template <typename T>
+	bool HasComponent(Entity entity)
+	{
+		return componentManager.HasComponent<T>(entity);
+	}
+
+	template <typename T>
 	T& GetComponent(Entity entity)
 	{
 		return componentManager.GetComponent<T>(entity);
+	}
+
+	template <typename T>
+	T& GetOrAddComponent(Entity entity, const T& component)
+	{
+		if (HasComponent<T>(entity))
+			return GetComponent<T>(entity);
+		else
+			return AddComponent(entity, component);
 	}
 
 	template <typename... Components>

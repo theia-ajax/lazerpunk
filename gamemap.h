@@ -4,6 +4,7 @@
 #include "sprites.h"
 #include <variant>
 #include <vector>
+#include <optional>
 
 struct Camera;
 
@@ -108,6 +109,15 @@ namespace map
 	GameMapHandle Load(const char* fileName);
 	void Reload(GameMapHandle handle);
 	GameMap& Get(GameMapHandle handle);
+	std::optional<GameMapLayer> GetLayer(GameMap& map, const char* layerName);
+
+	constexpr StrId GetLayerNameId(const GameMapLayer& layer)
+	{
+		return std::visit([](auto&& arg) -> StrId
+			{
+				return arg.nameId;
+			}, layer);
+	}
 
 	void Draw(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet);
 	void DrawLayers(const DrawContext& ctx, const GameMap& map, const Camera& camera, const SpriteSheet& sheet, const StrId* layerNames, size_t count);
@@ -117,5 +127,4 @@ namespace map
 	{
 		DrawLayers(ctx, map, camera, sheet, layers.data(), layers.size());
 	}
-
 }

@@ -101,3 +101,26 @@ struct GameCameraControl
 	Entity followTarget{};
 	Bounds2D followBounds;
 };
+
+
+struct Collider
+{
+	struct Box
+	{
+		Vec2 center;
+		Vec2 extents;
+	};
+
+	struct Circle
+	{
+		Vec2 center;
+		float radius;
+	};
+
+	std::variant<Box, Circle> shape;
+};
+
+struct DebugMarker
+{
+	Color color{};
+};

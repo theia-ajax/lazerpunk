@@ -67,6 +67,10 @@ namespace math
 
 	template <typename T>
 	T Sign(const T& v) { return (v > static_cast<T>(0)) ? static_cast<T>(1) : ((v < static_cast<T>(0)) ? static_cast<T>(-1) : static_cast<T>(0)); }
+
+	template <typename T> constexpr int FloorToInt(T v) { return static_cast<int>(std::floor(v)); }
+	template <typename T> constexpr int CeilToInt(T v) { return static_cast<int>(std::ceil(v)); }
+	template <typename T> constexpr int RoundToInt(T v) { return static_cast<int>(std::round(v)); }
 }
 
 // Just use this with default-constructable, trivially copyable types

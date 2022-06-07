@@ -1,11 +1,13 @@
 #pragma once
 
+#include "DebugMarkerSystem.h"
 #include "EnemyFollowTargetSystem.h"
 #include "EntityExpirationSystem.h"
 #include "GameCameraControlSystem.h"
 #include "GameMapRenderSystem.h"
 #include "GatherInputSystem.h"
 #include "MoverSystem.h"
+#include "PhysicsSystem.h"
 #include "PlayerControlSystem.h"
 #include "PlayerShootControlSystem.h"
 #include "SpriteFacingSystem.h"
