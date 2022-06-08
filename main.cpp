@@ -43,7 +43,8 @@ int main(int argc, char* argv[])
 	SDL_RenderGetLogicalSize(renderer, &canvasX, &canvasY);
 	Vec2 viewExtents{ static_cast<float>(canvasX), static_cast<float>(canvasY) };
 
-	SpriteSheet sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);;
+	SpriteSheet sheet = sprite_sheet::Import("assets/spritesheet.tsj", renderer);
+	//SpriteSheet sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);;
 	GameMapHandle map = map::Load("assets/testmap.tmj");
 
 	DrawContext drawContext{ renderer, sheet };
@@ -104,8 +105,8 @@ int main(int argc, char* argv[])
 		PlayerShootControl{ 0.15f },
 		Facing{ Direction::Right },
 		Velocity{},
-		FacingSprites{ 1043, 1042, 1041 },
-		SpriteRender{ 1043, SpriteFlipFlags::None, vec2::Half },
+		FacingSprites{ 10, 9, 8 },
+		SpriteRender{ 10, SpriteFlipFlags::None, vec2::Half },
 		Collider::Box{ vec2::Zero, vec2::One * 0.45f },
 		PhysicsBody{},
 		DebugMarker{});
@@ -123,7 +124,7 @@ int main(int argc, char* argv[])
 		world.AddComponents(enemy,
 			Transform{ position },
 			Velocity{},
-			SpriteRender{ 320, SpriteFlipFlags::None, vec2::Half },
+			SpriteRender{ 26, SpriteFlipFlags::None, vec2::Half },
 			EnemyTag{},
 			PhysicsBody{},
 			PhysicsNudge{0.6f, 0.33f, 5.0f},

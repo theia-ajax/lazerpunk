@@ -10,7 +10,6 @@
 #include <queue>
 #include <set>
 #include <unordered_map>
-#include <vcruntime_typeinfo.h>
 #include "types.h"
 
 class World;

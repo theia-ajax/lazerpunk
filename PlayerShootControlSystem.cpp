@@ -37,7 +37,7 @@ void PlayerShootControlSystem::Update(const GameTime& time) const
 					Velocity{ bulletVel },
 					PhysicsBody{},
 					Facing{ facing.facing },
-					SpriteRender{ 664, flags, vec2::Half },
+					SpriteRender{ 14	, flags, vec2::Half },
 					Expiration{ 1.0f });
 			}
 		}

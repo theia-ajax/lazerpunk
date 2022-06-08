@@ -44,6 +44,7 @@ namespace sprite_sheet
 	const SpriteRect& InvalidRect();
 
 	SpriteSheet Create(SDL_Renderer* renderer, const char* fileName, int spriteWidth, int spriteHeight, int padding);
+	SpriteSheet Import(const char* sheetFileName, SDL_Renderer* renderer);
 	void Destroy(SpriteSheet& sheet);
 	SpriteRect GetRect(const SpriteSheet& sheet, int spriteId, bool diagnolFlip = false);
 	int GetSpriteId(const SpriteSheet& sheet, int spriteX, int spriteY);

@@ -1,7 +1,11 @@
 #include "sprites.h"
 
-#include <SDL2/SDL.h>
+#include <filesystem>
+#include <fstream>
 #include <stb_image.h>
+#include <rapidjson/document.h>
+#include <rapidjson/istreamwrapper.h>
+#include <SDL2/SDL.h>
 
 constexpr SpriteRect kInvalidRect = SpriteRect{};
 bool operator==(const SpriteRect& a, const SpriteRect& b) { return a.x == b.x && a.y == b.y && a.w == b.w && a.h == b.h; }
@@ -30,7 +34,7 @@ SpriteSheet sprite_sheet::Create(SDL_Renderer* renderer, const char* fileName, i
 	int sheetWidth, sheetHeight, _, sheetPitch = 0;
 	SDL_Rect imageRect{};
 	stbi_uc* data = nullptr;
-	if ((data = stbi_load("assets/spritesheet.png", &sheetWidth, &sheetHeight, &_, 4)))
+	if ((data = stbi_load(fileName, &sheetWidth, &sheetHeight, &_, 4)))
 	{
 		sheetPitch = sheetWidth * 4;
 		imageSurface = SDL_CreateRGBSurfaceWithFormatFrom(data, sheetWidth, sheetHeight, 4, sheetPitch, SDL_PIXELFORMAT_ABGR8888);
@@ -109,6 +113,27 @@ SpriteSheet sprite_sheet::Create(SDL_Renderer* renderer, const char* fileName, i
 	stbi_image_free(data);
 
 	return result;
+}
+
+SpriteSheet sprite_sheet::Import(const char* sheetFileName, SDL_Renderer* renderer)
+{
+	std::ifstream inFileStream(sheetFileName);
+	rapidjson::IStreamWrapper streamWrapper(inFileStream);
+
+	rapidjson::Document doc;
+	doc.ParseStream(streamWrapper);
+
+	const char* imageFilename = doc["image"].GetString();
+	//int margin = doc["margin"].GetInt();
+	int padding = doc["spacing"].GetInt();
+	int tileWidth = doc["tilewidth"].GetInt();
+	int tileHeight = doc["tileheight"].GetInt();
+
+	auto path = std::filesystem::path(sheetFileName);
+	auto imagePath = path.parent_path().append(std::string(imageFilename));
+	auto imagePathStr = imagePath.string();
+
+	return Create(renderer, imagePathStr.c_str(), tileWidth, tileHeight, padding);
 }
 
 void sprite_sheet::Destroy(SpriteSheet& sheet)

@@ -88,7 +88,12 @@ bool PhysicsSystem::MapSolid(const Vec2& point) const
 	int index = px + py * solidLayer.tileCountX;
 	auto [tileGlobalId, position, flipFlags] = solidLayer.tiles[index];
 
-	return (tileGlobalId == 588 || tileGlobalId == 149);
+	if (tileGlobalId == 0)
+		return false;
+
+	int id = tileGlobalId - 1;
+
+	return (id == 7 || id == 58);
 }
 
 bool PhysicsSystem::MapSolid(const Bounds2D& bounds, const Vec2& velocity) const
