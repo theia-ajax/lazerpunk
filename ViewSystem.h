@@ -1,9 +1,10 @@
 ﻿#pragma once
 
+#include "components.h"
 #include "ecs.h"
 #include "types.h"
 
-struct ViewSystem : System
+struct ViewSystem : System<ViewSystem, Transform, CameraView>
 {
 	Entity activeCameraEntity = kInvalidEntity;
 

@@ -16,8 +16,7 @@ void GatherInputSystem::Update(const GameTime& time) const
 {
 	for (Entity entity : entities)
 	{
-		auto& gather = GetWorld().GetComponent<GameInputGather>(entity);
-		auto& gameInput = GetWorld().GetComponent<GameInput>(entity);
+		auto [gather, gameInput] = GetArchetype(entity);
 
 		DirectionInput(gather.moveDown, gather.moveDownTimestamp, SDL_SCANCODE_LEFT, Direction::Left, time.t());
 		DirectionInput(gather.moveDown, gather.moveDownTimestamp, SDL_SCANCODE_RIGHT, Direction::Right, time.t());

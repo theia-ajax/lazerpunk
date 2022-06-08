@@ -1,10 +1,11 @@
 ﻿#pragma once
 
+#include "components.h"
 #include "ecs.h"
 #include "draw.h"
 #include "types.h"
 
-struct GameMapRenderSystem : System
+struct GameMapRenderSystem : System<GameMapRenderSystem, Transform, GameMapRender>
 {
 	void RenderLayers(const DrawContext& ctx, const StrId* layers, size_t count) const;
 

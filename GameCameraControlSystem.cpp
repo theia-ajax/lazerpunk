@@ -4,7 +4,7 @@
 
 void GameCameraControlSystem::SnapFocusToFollow(Entity cameraEntity) const
 {
-	auto [transform, view, camera] = GetWorld().GetComponents<Transform, CameraView, GameCameraControl>(cameraEntity);
+	auto [transform, view, camera] = GetArchetype(cameraEntity);
 
 	if (!camera.followTarget)
 		return;
@@ -19,7 +19,7 @@ void GameCameraControlSystem::Update(const GameTime& time) const
 {
 	for (Entity entity : entities)
 	{
-		auto [transform, view, camera] = GetWorld().GetComponents<Transform, CameraView, GameCameraControl>(entity);
+		auto [transform, view, camera] = GetArchetype(entity);
 
 		if (camera.followTarget)
 		{

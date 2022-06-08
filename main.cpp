@@ -35,7 +35,7 @@ int main(int argc, char* argv[])
 	random::GameRandGen rng(stm_now() | (stm_now() << 24));
 
 	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, 0);
-	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
 	SDL_RenderSetLogicalSize(renderer, 256, 144);
 
@@ -67,20 +67,19 @@ int main(int argc, char* argv[])
 		DebugMarker,
 		PhysicsNudge>();
 
-	auto expirationSystem = world.RegisterSystem<EntityExpirationSystem, Expiration>();
-	auto viewSystem = world.RegisterSystem<ViewSystem, Transform, CameraView>();
-	auto gatherInputSystem = world.RegisterSystem<GatherInputSystem, GameInputGather, GameInput>();
-	auto playerControlSystem = world.RegisterSystem<PlayerControlSystem, GameInput, Transform, Facing, Velocity, PlayerControl>();
-	auto playerShootSystem = world.RegisterSystem<PlayerShootControlSystem, GameInput, Transform, Facing, Velocity, PlayerShootControl>();
-	auto spriteFacingSystem = world.RegisterSystem<SpriteFacingSystem, Facing, FacingSprites, SpriteRender>();
-	auto spriteRenderSystem = world.RegisterSystem<SpriteRenderSystem, Transform, SpriteRender>();
-	auto gameMapRenderSystem = world.RegisterSystem<GameMapRenderSystem, Transform, GameMapRender>();
-	auto cameraControlSystem = world.RegisterSystem<GameCameraControlSystem, Transform, CameraView, GameCameraControl>();
-	auto enemyFollowSystem = world.RegisterSystem<EnemyFollowTargetSystem, Transform, Velocity, EnemyTag>();
+	auto expirationSystem = EntityExpirationSystem::Register(world);
+	auto viewSystem = ViewSystem::Register(world);
+	auto gatherInputSystem = GatherInputSystem::Register(world);
+	auto playerControlSystem = PlayerControlSystem::Register(world);
+	auto playerShootSystem = PlayerShootControlSystem::Register(world);
+	auto spriteFacingSystem = SpriteFacingSystem::Register(world);
+	auto spriteRenderSystem = SpriteRenderSystem::Register(world);
+	auto gameMapRenderSystem = GameMapRenderSystem::Register(world);
+	auto cameraControlSystem = GameCameraControlSystem::Register(world);
+	auto enemyFollowSystem = EnemyFollowTargetSystem::Register(world);
 	auto nudgeSystem = PhysicsNudgeSystem::Register(world, SystemFlags::Monitor);
-	auto physicsSystem = world.RegisterSystem<PhysicsSystem, Transform, PhysicsBody, Collider::Box>();
-	auto debugMarkerSystem = world.RegisterSystem<DebugMarkerSystem, Transform, DebugMarker, Collider::Box>();
-
+	auto physicsSystem = PhysicsSystem::Register(world);
+	auto debugMarkerSystem = DebugMarkerSystem::Register(world);
 	auto physicsBodyVelocitySystem = PhysicsBodyVelocitySystem::Register(world);
 
 	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
@@ -92,10 +91,6 @@ int main(int argc, char* argv[])
 		Transform{},
 		CameraView{ viewExtents },
 		GameCameraControl{ map, playerEntity, {{-2, -0.75f}, {2, 0.75f}} });
-
-	static_stack<uint8_t, 4> bytes = {
-		1, 2, 3
-	};
 
 	world.AddComponents(mapEntity,
 		Transform{},
@@ -115,16 +110,23 @@ int main(int argc, char* argv[])
 		PhysicsBody{},
 		DebugMarker{});
 
-	auto enemyEntities = world.CreateEntities<25>();
+	auto enemyEntities = world.CreateEntities<50>();
 	for (Entity enemy : enemyEntities)
 	{
+		Vec2 position;
+		do
+		{
+			position = { rng.RangeF(1.0f, 31.0f), rng.RangeF(1.0f, 15.0f) };
+		}
+		while (physicsSystem->MapSolid(Bounds2D::FromCenter(position, vec2::Half)));
+		
 		world.AddComponents(enemy,
-			Transform{ {rng.RangeF(1.0f, 31.0f), rng.RangeF(1.0f, 15.0f)} },
+			Transform{ position },
 			Velocity{},
 			SpriteRender{ 320, SpriteFlipFlags::None, vec2::Half },
 			EnemyTag{},
 			PhysicsBody{},
-			PhysicsNudge{0.5f, 0.5f},
+			PhysicsNudge{0.6f, 0.33f, 5.0f},
 			Collider::Box{vec2::Zero, vec2::One * 0.45f});
 	}
 
@@ -133,7 +135,7 @@ int main(int argc, char* argv[])
 
 	cameraControlSystem->SnapFocusToFollow(cameraEntity);
 
-	constexpr double kTargetFrameTime = 0.0;
+	constexpr double kTargetFrameTime = 1.0 / 60;
 	constexpr double kFixedTimeStepSec = 1.0 / 60.0;
 
 	uint64_t startTime = stm_now();
@@ -143,6 +145,7 @@ int main(int argc, char* argv[])
 	double secondTimer = 1.0;
 	int frameCountThisSecond = 0;
 	int fps = 0;
+	uint64_t frameTicks = 0;
 
 	bool isRunning = true;
 	bool showSpriteSheet = false;
@@ -217,15 +220,26 @@ int main(int argc, char* argv[])
 		draw::Clear(drawContext);
 		gameMapRenderSystem->RenderLayers(drawContext, std::array{ StrId("Background") });
 		spriteRenderSystem->Render(drawContext);
-		debugMarkerSystem->DrawMarkers(drawContext);
+		//debugMarkerSystem->DrawMarkers(drawContext);
 
 		SpriteSheetViewRender(drawContext, ssv);
+
+		{
+			char buffer[32];
+			snprintf(buffer, 32, "Frame Time: %0.4fms", stm_sec(frameTicks));
+			SDL_Surface* textSurface = TTF_RenderText_Blended_Wrapped(debugFont, buffer, SDL_Color{ 255, 255, 255, 255 }, canvasX);
+			SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
+			SDL_Rect textRect{ 0, 0, textSurface->w, textSurface->h };
+			SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
+			SDL_DestroyTexture(textTexture);
+			SDL_FreeSurface(textSurface);
+		}
 
 		SDL_RenderPresent(renderer);
 
 		++frameCountThisSecond;
 
-		printf("Entities: %04u\r", world.GetEntityCount());
+		frameTicks = stm_now() - clock;
 
 		if constexpr (kTargetFrameTime > 0)
 		{

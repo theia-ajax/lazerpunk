@@ -9,7 +9,7 @@ void SpriteRenderSystem::Render(const DrawContext& ctx) const
 
 	for (Entity entity : entities)
 	{
-		const auto& [transform, sprite] = GetWorld().GetComponents<Transform, SpriteRender>(entity);
+		auto [transform, sprite] = GetArchetype(entity);
 		Vec2 screenPos = viewSystem->WorldToScreen(transform.position);
 		draw::Sprite(ctx,
 		             ctx.sheet,

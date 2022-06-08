@@ -6,8 +6,7 @@ void PlayerShootControlSystem::Update(const GameTime& time) const
 {
 	for (Entity entity : entities)
 	{
-		const auto [input, transform, facing, velocity] = GetWorld().GetComponents<GameInput, Transform, Facing, Velocity>(entity);
-		auto& shootControl = GetWorld().GetComponent<PlayerShootControl>(entity);
+		auto [input, transform, facing, velocity, shootControl] = GetArchetype(entity);
 
 		if (shootControl.cooldownRemaining > 0)
 			shootControl.cooldownRemaining -= time.dt();
@@ -36,6 +35,7 @@ void PlayerShootControlSystem::Update(const GameTime& time) const
 				GetWorld().AddComponents(bulletEntity,
 					Transform{ {transform.position} },
 					Velocity{ bulletVel },
+					PhysicsBody{},
 					Facing{ facing.facing },
 					SpriteRender{ 664, flags, vec2::Half },
 					Expiration{ 1.0f });

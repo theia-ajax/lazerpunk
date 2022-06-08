@@ -9,11 +9,7 @@ void PlayerControlSystem::Update(const GameTime& time) const
 
 	for (Entity entity : entities)
 	{
-		auto& input = GetWorld().GetComponent<GameInput>(entity);
-		auto& transform = GetWorld().GetComponent<Transform>(entity);
-		auto& [facing] = GetWorld().GetComponent<Facing>(entity);
-		auto& [velocity] = GetWorld().GetComponent<Velocity>(entity);
-		auto& control = GetWorld().GetComponent<PlayerControl>(entity);
+		auto [input, transform, facing, velocity, control] = GetArchetype(entity);
 
 		control.velocity = input.moveInput * 10.0f;
 
@@ -22,7 +18,7 @@ void PlayerControlSystem::Update(const GameTime& time) const
 			input.requestDash = false;
 			if (Length(control.dashVelocity) < 0.1f)
 			{
-				control.dashVelocity = DirectionVector(facing) * 25.0f;
+				control.dashVelocity = DirectionVector(facing.facing) * 25.0f;
 			}
 		}
 
@@ -40,7 +36,7 @@ void PlayerControlSystem::Update(const GameTime& time) const
 
 		if (input.direction != Direction::Invalid)
 		{
-			facing = input.direction;
+			facing.facing = input.direction;
 
 			float posRefComp = transform.position.y;
 			float velRefComp = input.moveInput.x;
@@ -60,6 +56,6 @@ void PlayerControlSystem::Update(const GameTime& time) const
 			*velTargetComp += min(moveMag, abs(deltaDiff)) * Sign(deltaDiff) / time.dt();
 		}
 
-		velocity = newVelocity;
+		velocity.velocity = newVelocity;
 	}
 }

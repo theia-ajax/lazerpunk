@@ -9,7 +9,7 @@ void GameMapRenderSystem::RenderLayers(const DrawContext& ctx, const StrId* laye
 	const auto& viewSystem = GetWorld().GetSystem<ViewSystem>();
 	for (Entity entity : entities)
 	{
-		auto [transform, mapRender] = GetWorld().GetComponents<Transform, GameMapRender>(entity);
+		auto [transform, mapRender] = GetArchetype(entity);
 		if (mapRender.mapHandle)
 		{
 			const auto& map = map::Get(mapRender.mapHandle);

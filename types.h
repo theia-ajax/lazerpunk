@@ -42,6 +42,7 @@ namespace math
 	using std::abs;
 
 	constexpr float Epsilon = FLT_EPSILON * 4;
+	constexpr float Root2 = 1.414213562f;
 
 	inline bool ApproxEqual(float a, float b)
 	{
@@ -168,7 +169,11 @@ namespace vec2
 	constexpr Vec2 Half{ 0.5f, 0.5f };
 	constexpr Vec2 UnitX{ 1, 0 };
 	constexpr Vec2 UnitY{ 0, 1 };
-
+	constexpr Vec2 UpRight{ math::Root2, math::Root2 };
+	constexpr Vec2 UpLeft{ -math::Root2, math::Root2 };
+	constexpr Vec2 DownLeft{ -math::Root2, -math::Root2 };
+	constexpr Vec2 DownRight{ math::Root2, -math::Root2 };
+	
 	template<typename T>
 	constexpr Vec2 Create(T x, T y)
 	{

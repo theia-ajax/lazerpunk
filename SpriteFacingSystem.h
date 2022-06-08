@@ -1,8 +1,9 @@
 ﻿#pragma once
 
+#include "components.h"
 #include "ecs.h"
 
-struct SpriteFacingSystem : System
+struct SpriteFacingSystem : System<SpriteFacingSystem, Facing, FacingSprites, SpriteRender>
 {
 	void Update() const;
 };

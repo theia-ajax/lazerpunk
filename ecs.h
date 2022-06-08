@@ -4,13 +4,14 @@
 // https://austinmorlan.com/posts/entity_component_system
 
 
-#include "types.h"
 #include <bitset>
-#include <queue>
-#include <unordered_map>
-#include <set>
 #include <memory>
+#include <optional>
+#include <queue>
+#include <set>
+#include <unordered_map>
 #include <vcruntime_typeinfo.h>
+#include "types.h"
 
 class World;
 using Entity = uint32_t;
@@ -262,9 +263,9 @@ enum class SystemFlags
 	Monitor = 1 << 0,
 };
 
-struct System  // NOLINT(cppcoreguidelines-special-member-functions)
+struct SystemBase  // NOLINT(cppcoreguidelines-special-member-functions)
 {
-	virtual ~System();
+	virtual ~SystemBase();
 
 	World& GetWorld() const;
 	std::set<Entity> entities{};
@@ -281,17 +282,18 @@ private:
 	SystemFlags flags = SystemFlags::None;
 };
 
-inline System::~System() = default;
-inline World& System::GetWorld() const { return *world; }
-inline SystemFlags System::Flags() const { return flags; }
-inline void System::OnEntityAdded(Entity entity) {}
-inline void System::OnEntityRemoved(Entity entity) {}
+inline SystemBase::~SystemBase() = default;
+inline World& SystemBase::GetWorld() const { return *world; }
+inline SystemFlags SystemBase::Flags() const { return flags; }
+inline void SystemBase::OnEntityAdded(Entity entity) {}
+inline void SystemBase::OnEntityRemoved(Entity entity) {}
 
 
 template <typename T, typename... Components>
-struct TypedSystem : System
+struct System : SystemBase
 {
 	static auto Register(World& world, SystemFlags systemFlags = SystemFlags::None);
+	std::tuple<Components&...> GetArchetype(Entity entity) const;
 };
 
 class World;
@@ -307,7 +309,7 @@ class SystemManager
 	}
 
 public:
-	template <typename T, std::enable_if_t<std::is_base_of_v<System, T>, bool> = true>
+	template <typename T, std::enable_if_t<std::is_base_of_v<SystemBase, T>, bool> = true>
 	std::shared_ptr<T> RegisterSystem(World* world, SystemFlags systemFlags = SystemFlags::None)
 	{
 		SystemId systemId = GetSystemId<T>();
@@ -352,7 +354,7 @@ public:
 
 		ASSERT(systems.contains(systemId) && "System has not been registered.");
 
-		return std::reinterpret_pointer_cast<T, System>(systems[systemId]);
+		return std::reinterpret_pointer_cast<T, SystemBase>(systems[systemId]);
 	}
 
 	template <typename T>
@@ -401,7 +403,7 @@ public:
 
 private:
 	std::unordered_map<SystemId, Signature> signatures{};
-	std::unordered_map<SystemId, std::shared_ptr<System>> systems{};
+	std::unordered_map<SystemId, std::shared_ptr<SystemBase>> systems{};
 };
 
 class World
@@ -487,6 +489,14 @@ public:
 	T& GetComponent(Entity entity)
 	{
 		return componentManager.GetComponent<T>(entity);
+	}
+
+	template <typename T>
+	std::optional<std::reference_wrapper<T>> GetOptionalComponent(Entity entity)
+	{
+		if (HasComponent<T>(entity))
+			return componentManager.GetComponent<T>(entity);
+		return {};
 	}
 
 	template <typename T>
@@ -593,7 +603,6 @@ private:
 		}
 	}
 
-
 private:
 	EntityManager entityManager;
 	ComponentManager componentManager;
@@ -601,7 +610,13 @@ private:
 };
 
 template <typename T, typename ... Components>
-auto TypedSystem<T, Components...>::Register(World& world, SystemFlags systemFlags)
+auto System<T, Components...>::Register(World& world, SystemFlags systemFlags)
 {
 	return world.RegisterSystem<T, Components...>(systemFlags);
+}
+
+template <typename T, typename ... Components>
+std::tuple<Components&...> System<T, Components...>::GetArchetype(Entity entity) const
+{
+	return GetWorld().template GetComponents<Components...>(entity);
 }

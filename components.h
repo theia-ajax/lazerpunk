@@ -71,11 +71,6 @@ struct PlayerShootControl
 	float cooldownRemaining{};
 };
 
-struct Steering
-{
-	
-};
-
 struct EnemyTag
 {
 	
@@ -131,6 +126,7 @@ struct DebugMarker
 struct PhysicsNudge
 {
 	float radius = 0.5f;
-	float strength = 0.01f;
+	float minStrength = 0.01f;
+	float maxStrength{};
 	Vec2 velocity{};
 };

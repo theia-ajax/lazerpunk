@@ -7,11 +7,7 @@ void SpriteFacingSystem::Update() const
 {
 	for (Entity entity : entities)
 	{
-		const auto& [facing] = GetWorld().GetComponent<Facing>(entity);
-		const auto& facingSprites = GetWorld().GetComponent<FacingSprites>(entity);
-		auto& sprite = GetWorld().GetComponent<SpriteRender>(entity);
-
-		switch (facing)
+		switch (auto [facing, facingSprites, sprite] = GetArchetype(entity); facing.facing)
 		{
 		default: break;
 		case Direction::Left:

@@ -9,7 +9,7 @@ void DebugMarkerSystem::DrawMarkers(const DrawContext& ctx) const
 
 	for (Entity entity : entities)
 	{
-		auto [transform, marker, box] = GetWorld().GetComponents<Transform, DebugMarker, Collider::Box>(entity);
+		auto [transform, marker, box] = GetArchetype(entity);
 
 		if (marker.color.a > 0)
 		{
