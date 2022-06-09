@@ -176,6 +176,7 @@
     <ClCompile Include="ViewSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="bitfield.h" />
     <ClInclude Include="components.h" />
     <ClInclude Include="debug.h" />
     <ClInclude Include="DebugMarkerSystem.h" />

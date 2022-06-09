@@ -1,3 +1,5 @@
+#define _CRT_SECURE_NO_WARNINGS
+
 #include <array>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
@@ -111,8 +113,28 @@ int main(int argc, char* argv[])
 		PhysicsBody{},
 		DebugMarker{});
 
-	auto enemyEntities = world.CreateEntities<50>();
-	for (Entity enemy : enemyEntities)
+	Entity enemyPrefab = world.CreateEntity();
+	world.AddComponents(enemyPrefab,
+		Prefab{},
+		Transform{},
+		Velocity{},
+		SpriteRender{ 26, SpriteFlipFlags::None, vec2::Half },
+		EnemyTag{},
+		PhysicsBody{},
+		PhysicsNudge{ 0.6f, 0.33f, 5.0f },
+		Collider::Box{ vec2::Zero, vec2::One * 0.45f });
+
+	uint64_t start = stm_now();
+	for (int i = 0; i < 250; ++i)
+	{
+		Entity enemy = world.CloneEntity(enemyPrefab);
+		world.RemoveComponent<Prefab>(enemy);
+		world.GetComponent<Transform>(enemy).position = { rng.RangeF(1.0f, 31.0f), rng.RangeF(1.0f, 15.0f) };
+	}
+	uint64_t took = stm_diff(stm_now(), start);
+
+#if 0
+	for (auto enemyEntities = world.CreateEntities<1>(); Entity enemy : enemyEntities)
 	{
 		Vec2 position;
 		do
@@ -129,7 +151,11 @@ int main(int argc, char* argv[])
 			PhysicsBody{},
 			PhysicsNudge{0.6f, 0.33f, 5.0f},
 			Collider::Box{vec2::Zero, vec2::One * 0.45f});
+
+		world.CloneEntity(enemy);
+		world.AddComponent(enemy, Prefab{});
 	}
+#endif
 
 	StringReport report = StrId::QueryStringReport();
 	PrintStringReport(report);
@@ -339,7 +365,6 @@ namespace internal
 
 void PrintStringReport(const StringReport& report)
 {
-
 	printf("String Report:\n");
 	printf("\tBlock Memory: %d\n", report.blockSize * report.blockCapacity);
 	printf("\tBlock Usage: %d\n", report.blockSize * report.blockCount);

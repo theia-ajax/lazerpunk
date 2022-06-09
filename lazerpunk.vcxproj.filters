@@ -177,6 +177,9 @@
     <ClInclude Include="debug.h">
       <Filter>Source Files\Core</Filter>
     </ClInclude>
+    <ClInclude Include="bitfield.h">
+      <Filter>Source Files\Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\spritesheet.tsj">

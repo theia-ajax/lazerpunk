@@ -84,3 +84,8 @@ struct PhysicsNudgeSystem : System<PhysicsNudgeSystem, Transform, PhysicsNudge, 
 private:
 	std::vector<Entity> entityVector;
 };
+
+struct SpawnerSystem : System<SpawnerSystem, Transform, Spawner>
+{
+	
+};

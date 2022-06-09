@@ -8,9 +8,11 @@
 #include <memory>
 #include <optional>
 #include <queue>
+#include <ranges>
 #include <set>
 #include <unordered_map>
 #include "types.h"
+#include "bitfield.h"
 
 class World;
 using Entity = uint32_t;
@@ -20,8 +22,55 @@ constexpr Entity kInvalidEntity = 0;
 using ComponentType = uint8_t;
 constexpr ComponentType kMaxComponents = 64;
 
+template <typename T>
+struct Reject
+{
+	using Component = T;
+	uint64_t dummy;
+};
+
+static uint64_t sIgnoredData = 0xFEEDBEEFDEADBEEF;
+
+template <typename T>
+constexpr Reject<typename T::Component>& IgnoredDummyRef()
+{
+	return reinterpret_cast<Reject<typename T::Component>&>(sIgnoredData);
+}
+
+template <class T, template <class...> class Template>
+struct is_specialization : std::false_type {};
+
+template <template <class...> class Template, class... Args>
+struct is_specialization<Template<Args...>, Template> : std::true_type {};
+
+template <typename T>
+struct is_reject_component : is_specialization<T, Reject> {};
+
+template <typename T>
+inline constexpr bool is_reject_component_v = is_reject_component<T>::value;
+
+struct Prefab {};
+
 // Signatures represent which 
-using Signature = std::bitset<kMaxComponents>;
+struct Signature
+{
+	bitfield<kMaxComponents> signature;
+	bitfield<kMaxComponents> ignored;
+
+	void reset() { signature.reset(); ignored.reset(); }
+	bool Matches(const Signature& other) const
+	{
+		return (signature & other.signature) == signature &&
+			(ignored & other.signature).lowest() < 0;
+	}
+
+	Signature& operator|=(const Signature& other)
+	{
+		signature |= other.signature;
+		ignored |= other.ignored;
+		return *this;
+	}
+};
 
 // Tracks available entity indices and signatures of active entities
 class EntityManager
@@ -91,12 +140,28 @@ class IComponentArray
 public:
 	virtual ~IComponentArray() = default;
 	virtual void OnEntityDestroyed(Entity entity) = 0;
+
+	virtual void* TryGetUntypedComponentPtr(Entity entity) = 0;
+	virtual size_t GetComponentSize() = 0;
+	virtual void* InsertUntyped(Entity entity, const void* source, size_t size) = 0;
 };
 
 template <typename T>
 class ComponentArray final : public IComponentArray
 {
 public:
+	void* InsertUntyped(Entity entity, const void* source, size_t sourceSize) override
+	{
+		ASSERT(!entityToIndexMap.contains(entity) && "Component already added to entity.");
+
+		size_t newIndex = size++;
+		entityToIndexMap[entity] = newIndex;
+		indexToEntityMap[newIndex] = entity;
+
+		std::memcpy(&componentArray[newIndex], source, sourceSize);
+		return &componentArray[newIndex];
+	}
+
 	T& Insert(Entity entity, const T& component)
 	{
 		ASSERT(!entityToIndexMap.contains(entity) && "Component already added to entity.");
@@ -108,6 +173,8 @@ public:
 
 		return componentArray[newIndex];
 	}
+
+	T& GetDummyComponent() { return componentArray[0]; }
 
 	void Remove(Entity entity)
 	{
@@ -154,32 +221,48 @@ public:
 		}
 	}
 
+	void* TryGetUntypedComponentPtr(Entity entity) override
+	{
+		if (entityToIndexMap.contains(entity))
+		{
+			return &componentArray[entityToIndexMap[entity]];
+		}
+		return nullptr;
+	}
+
+	size_t GetComponentSize() override
+	{
+		return sizeof(T);
+	}
+
 private:
-	std::array<T, kMaxEntities> componentArray{};
+	std::array<T, kMaxEntities + 1> componentArray{};
 	std::unordered_map<Entity, size_t> entityToIndexMap{};
 	std::unordered_map<size_t, Entity> indexToEntityMap{};
-	size_t size{};
+	size_t size = 1;
 };
 
 class ComponentManager
 {
-	using ComponentId = StrId;
+	using ComponentId = intptr_t;
 
 	template <typename T>
 	static constexpr ComponentId GetComponentId()
 	{
-		return ComponentId(typeid(T).name());
+		return reinterpret_cast<ComponentId>(typeid(T).name());
 	}
 
 public:
 	template <typename T>
-	void RegisterComponent()
+	auto RegisterComponent() -> std::enable_if_t<std::is_trivially_copyable_v<T>, ComponentId>
 	{
 		ComponentId componentId = GetComponentId<T>();
 		ASSERT(!componentTypes.contains(componentId) && "Component already registered.");
 		componentTypes.insert({ componentId, nextComponentType });
+		componentIds.insert({ nextComponentType, componentId });
 		componentArrays.insert({ componentId, std::make_shared<ComponentArray<T>>() });
 		++nextComponentType;
+		return componentId;
 	}
 
 	template <typename T>
@@ -194,6 +277,11 @@ public:
 	T& AddComponent(Entity entity, const T& component)
 	{
 		return GetComponentArray<T>()->Insert(entity, component);
+	}
+
+	void* AddComponentUntyped(Entity entity, ComponentType componentType, const void* source, size_t size)
+	{
+		return GetUntypedComponentArray(componentType)->InsertUntyped(entity, source, size);
 	}
 
 	template <typename T>
@@ -214,9 +302,22 @@ public:
 		return GetComponentArray<T>()->Get(entity);
 	}
 
+	template <typename T>
+	T& GetDummyComponent() { return GetComponentArray<T>()->GetDummyComponent(); }
+
+	auto TryGetComponent(Entity entity, ComponentType type) -> std::pair<void*, size_t>
+	{
+		if (componentIds.contains(type))
+		{
+			auto componentArray = GetUntypedComponentArray(type);
+			return std::make_pair(componentArray->TryGetUntypedComponentPtr(entity), componentArray->GetComponentSize());
+		}
+		return std::make_pair(nullptr, 0);
+	}
+
 	void OnEntityDestroyed(Entity entity)
 	{
-		for (const auto& [_, component] : componentArrays)
+		for (const auto& component : componentArrays | std::views::values)
 		{
 			component->OnEntityDestroyed(entity);
 		}
@@ -233,8 +334,16 @@ private:
 	Signature BuildSignatureHelper() const
 	{
 		Signature signature;
-		ComponentType componentType = GetComponentType<Head>();
-		signature.set(componentType, true);
+		if constexpr (is_reject_component_v<Head>)
+		{
+			ComponentType ignoredType = GetComponentType<typename Head::Component>();
+			signature.ignored.set(ignoredType, true);
+		}
+		else
+		{
+			ComponentType componentType = GetComponentType<Head>();
+			signature.signature.set(componentType, true);
+		}
 		if constexpr (sizeof...(Tail) > 0)
 		{
 			signature |= BuildSignature<Tail...>();
@@ -244,6 +353,7 @@ private:
 
 private:
 	std::unordered_map<ComponentId, ComponentType> componentTypes{};
+	std::unordered_map<ComponentType, ComponentId> componentIds{};
 	std::unordered_map<ComponentId, std::shared_ptr<IComponentArray>> componentArrays;
 	ComponentType nextComponentType{};
 
@@ -253,6 +363,12 @@ private:
 		ComponentId componentId = GetComponentId<T>();
 		ASSERT(componentTypes.contains(componentId) && "Component not registerd.");
 		return std::static_pointer_cast<ComponentArray<T>>(componentArrays[componentId]);
+	}
+
+	std::shared_ptr<IComponentArray> GetUntypedComponentArray(ComponentType componentType)
+	{
+		ASSERT(componentIds.contains(componentType) && "Unable to find component for component type.");
+		return componentArrays[componentIds[componentType]];
 	}
 };
 
@@ -299,17 +415,17 @@ class World;
 
 class SystemManager
 {
-	using SystemId = StrId;
+	using SystemId = intptr_t;
 
 	template <typename T>
 	static constexpr SystemId GetSystemId()
 	{
-		return SystemId(typeid(T).name());
+		return reinterpret_cast<SystemId>(typeid(T).name());
 	}
 
 public:
-	template <typename T, std::enable_if_t<std::is_base_of_v<SystemBase, T>, bool> = true>
-	std::shared_ptr<T> RegisterSystem(World* world, SystemFlags systemFlags = SystemFlags::None)
+	template <typename T>
+	auto RegisterSystem(World* world, SystemFlags systemFlags = SystemFlags::None) -> std::enable_if_t<std::is_base_of_v<SystemBase, T>, std::shared_ptr<T>>
 	{
 		SystemId systemId = GetSystemId<T>();
 
@@ -378,12 +494,8 @@ public:
 	{
 		for (const auto& [systemId, system] : systems)
 		{
-			if (const auto& systemSignature = signatures[systemId]; (entitySignature & systemSignature) == systemSignature)
+			if (const auto& systemSignature = signatures[systemId]; systemSignature.Matches(entitySignature))
 			{
-				if (system->Flags() != SystemFlags::None)
-				{
-					int p = 0;
-				}
 				if (flags::Test(system->Flags(), SystemFlags::Monitor) && !system->entities.contains(entity))
 					system->OnEntityAdded(entity);
 
@@ -408,6 +520,11 @@ private:
 class World
 {
 public:
+	World()
+	{
+		RegisterComponent<Prefab>();
+	}
+
 	Entity CreateEntity()
 	{
 		return entityManager.CreateEntity();
@@ -425,6 +542,26 @@ public:
 		for (size_t i = 0; i < entityCount; ++i)
 			result.emplace_back(entityManager.CreateEntity());
 		return result;
+	}
+
+	Entity CloneEntity(Entity entity)
+	{
+		Entity newEntity = CreateEntity();
+
+		auto [signature, ignored] = entityManager.GetSignature(entity);
+		int nextTypeIndex = signature.lowest();
+		while (nextTypeIndex >= 0)
+		{
+			ComponentType nextType = static_cast<ComponentType>(nextTypeIndex);
+
+			if (auto [ptr, size] = componentManager.TryGetComponent(entity, nextType); ptr)
+				AddComponentUntyped(newEntity, nextType, ptr, size);
+
+			signature.set(nextTypeIndex, false);
+			nextTypeIndex = signature.lowest();
+		}
+
+		return newEntity;
 	}
 
 	void DestroyEntity(Entity entity)
@@ -452,7 +589,19 @@ public:
 		T& result = componentManager.AddComponent<T>(entity, component);
 
 		Signature signature = entityManager.GetSignature(entity);
-		signature.set(componentManager.GetComponentType<T>(), true);
+		signature.signature.set(componentManager.GetComponentType<T>(), true);
+		entityManager.SetSignature(entity, signature);
+
+		systemManager.OnEntitySignatureChanged(entity, signature);
+
+		return result;
+	}
+
+	void* AddComponentUntyped(Entity entity, ComponentType componentType, const void* source, size_t size)
+	{
+		void* result = componentManager.AddComponentUntyped(entity, componentType, source, size);
+		Signature signature = entityManager.GetSignature(entity);
+		signature.signature.set(componentType, true);
 		entityManager.SetSignature(entity, signature);
 
 		systemManager.OnEntitySignatureChanged(entity, signature);
@@ -472,7 +621,7 @@ public:
 		componentManager.RemoveComponent<T>(entity);
 
 		Signature signature = entityManager.GetSignature(entity);
-		signature.set(componentManager.GetComponentType<T>(), false);
+		signature.signature.set(componentManager.GetComponentType<T>(), false);
 		entityManager.SetSignature(entity, signature);
 
 		systemManager.OnEntitySignatureChanged(entity, signature);
@@ -491,6 +640,12 @@ public:
 	}
 
 	template <typename T>
+	T& GetDummyComponent()
+	{
+		return componentManager.GetDummyComponent<T>();
+	}
+
+	template <typename T>
 	std::optional<std::reference_wrapper<T>> GetOptionalComponent(Entity entity)
 	{
 		if (HasComponent<T>(entity))
@@ -503,8 +658,7 @@ public:
 	{
 		if (HasComponent<T>(entity))
 			return GetComponent<T>(entity);
-		else
-			return AddComponent(entity, component);
+		return AddComponent(entity, component);
 	}
 
 	template <typename... Components>
@@ -523,7 +677,7 @@ public:
 	std::shared_ptr<T> RegisterSystem(SystemFlags systemFlags = SystemFlags::None)
 	{
 		auto system = systemManager.RegisterSystem<T>(this, systemFlags);
-		Signature signature = BuildSignature<Components...>();
+		Signature signature = BuildSignature<Reject<Prefab>, Components...>();
 		SetSystemSignature<T>(signature);
 		return system;
 	}
@@ -532,7 +686,7 @@ public:
 	std::shared_ptr<T> RegisterSystemConfigured(const typename T::Config& config)
 	{
 		auto system = systemManager.RegisterSystemConfigured<T, typename T::Config>(this, config);
-		Signature signature = BuildSignature<Components...>();
+		Signature signature = BuildSignature<Reject<Prefab>, Components...>();
 		SetSystemSignature<T>(signature);
 		return system;
 	}
@@ -587,10 +741,19 @@ private:
 		}
 	}
 
+	template <typename T>
+	auto GetFirstHelper(Entity entity) -> std::tuple<T&>
+	{
+		if constexpr (is_reject_component_v<T>)
+			return IgnoredDummyRef<T>();
+		else
+			return GetComponent<T>(entity);
+	}
+
 	template <typename Head, typename... Tail>
 	std::tuple<Head&, Tail&...> GetComponentsHelper(Entity entity)
 	{
-		std::tuple<Head&> first = GetComponent<Head>(entity);
+		auto first = GetFirstHelper<Head>(entity);
 		if constexpr (sizeof...(Tail) > 0)
 		{
 			std::tuple<Tail&...> rest = GetComponentsHelper<Tail...>(entity);

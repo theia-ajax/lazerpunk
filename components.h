@@ -130,3 +130,10 @@ struct PhysicsNudge
 	float maxStrength{};
 	Vec2 velocity{};
 };
+
+struct Spawner
+{
+	Entity prefab{};
+	float interval{};
+	float spawnTimer{};
+};
