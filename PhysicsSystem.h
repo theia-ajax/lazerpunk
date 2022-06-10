@@ -17,6 +17,6 @@ struct PhysicsSystem : System<PhysicsSystem, Transform, PhysicsBody>
 private:
 	GameMapHandle activeMapHandle{};
 	std::optional<std::reference_wrapper<GameMap>> activeMap;
-	std::optional< std::reference_wrapper<GameMapTileLayer>> activeSolidLayer;
+	std::optional<std::reference_wrapper<GameMapTileLayer>> activeSolidLayer;
 };
 

@@ -12,15 +12,15 @@
                  "name":"_BGColor",
                  "objects":[
                         {
-                         "height":256,
+                         "height":288,
                          "id":1,
                          "name":"",
                          "rotation":0,
                          "type":"",
                          "visible":true,
-                         "width":480,
-                         "x":16,
-                         "y":16
+                         "width":512,
+                         "x":0,
+                         "y":0
                         }],
                  "opacity":1,
                  "type":"objectgroup",

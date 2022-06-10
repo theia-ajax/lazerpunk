@@ -7,11 +7,17 @@
 struct SDL_Renderer;
 struct SDL_FRect;
 struct SDL_Rect;
+typedef struct _TTF_Font TTF_Font;
 
 struct DrawContext
 {
 	SDL_Renderer* renderer;
 	SpriteSheet& sheet;
+	TTF_Font* font;
+	struct
+	{
+		int x, y;
+	} canvas;
 };
 
 struct DrawRect { Vec2 pos, dim; };

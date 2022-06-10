@@ -1,9 +1,12 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <array>
+#include <format>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
+
 #include "components.h"
+#include "debug.h"
 #include "draw.h"
 #include "ecs.h"
 #include "input.h"
@@ -32,7 +35,7 @@ int main(int argc, char* argv[])
 {
 	stm_setup();
 	TTF_Init();
-	TTF_Font* debugFont = TTF_OpenFont("assets/PressStart2P-Regular.ttf", 8);
+	TTF_Font* debugFont = TTF_OpenFont("assets/PressStart2P-Regular.ttf", 16);
 
 	random::GameRandGen rng(stm_now() | (stm_now() << 24));
 
@@ -49,7 +52,7 @@ int main(int argc, char* argv[])
 	//SpriteSheet sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);;
 	GameMapHandle map = map::Load("assets/testmap.tmj");
 
-	DrawContext drawContext{ renderer, sheet };
+	DrawContext drawContext{ renderer, sheet, debugFont, {canvasX, canvasY} };
 	SpriteSheetViewContext ssv{ sheet, debugFont, canvasX, canvasY };
 
 	world.RegisterComponents<
@@ -125,37 +128,40 @@ int main(int argc, char* argv[])
 		Collider::Box{ vec2::Zero, vec2::One * 0.45f });
 
 	uint64_t start = stm_now();
-	for (int i = 0; i < 250; ++i)
+	constexpr int ENEMY_COUNT = 25;
+#if 0
+	for (int i = 0; i < ENEMY_COUNT; ++i)
 	{
 		Entity enemy = world.CloneEntity(enemyPrefab);
 		world.RemoveComponent<Prefab>(enemy);
-		world.GetComponent<Transform>(enemy).position = { rng.RangeF(1.0f, 31.0f), rng.RangeF(1.0f, 15.0f) };
+		Vec2 position;
+		do
+		{
+			position = { rng.RangeF(1.0f, 31.0f), rng.RangeF(1.0f, 15.0f) };
+		} while (physicsSystem->MapSolid(Bounds2D::FromCenter(position, vec2::Half)));
+		world.GetComponent<Transform>(enemy).position = position;
 	}
-	uint64_t took = stm_diff(stm_now(), start);
-
-#if 0
-	for (auto enemyEntities = world.CreateEntities<1>(); Entity enemy : enemyEntities)
+#else
+	for (auto enemyEntities = world.CreateEntities<ENEMY_COUNT>(); Entity enemy : enemyEntities)
 	{
 		Vec2 position;
 		do
 		{
 			position = { rng.RangeF(1.0f, 31.0f), rng.RangeF(1.0f, 15.0f) };
-		}
-		while (physicsSystem->MapSolid(Bounds2D::FromCenter(position, vec2::Half)));
-		
+		} while (physicsSystem->MapSolid(Bounds2D::FromCenter(position, vec2::Half)));
+
 		world.AddComponents(enemy,
 			Transform{ position },
 			Velocity{},
 			SpriteRender{ 26, SpriteFlipFlags::None, vec2::Half },
 			EnemyTag{},
 			PhysicsBody{},
-			PhysicsNudge{0.6f, 0.33f, 5.0f},
-			Collider::Box{vec2::Zero, vec2::One * 0.45f});
-
-		world.CloneEntity(enemy);
-		world.AddComponent(enemy, Prefab{});
+			PhysicsNudge{ 0.6f, 0.33f, 5.0f },
+			Collider::Box{ vec2::Zero, vec2::One * 0.45f });
 	}
 #endif
+	uint64_t took = stm_diff(stm_now(), start);
+	debug::Log("main", std::format("Cloning {} enemies took {}ms", ENEMY_COUNT, stm_ms(took)));
 
 	StringReport report = StrId::QueryStringReport();
 	PrintStringReport(report);
@@ -209,12 +215,15 @@ int main(int argc, char* argv[])
 		if (input::GetKeyDown(SDL_SCANCODE_F5))
 		{
 			map::Reload(map);
+			physicsSystem->SetMap(map);
 		}
 
 		uint64_t deltaTime = stm_laptime(&clock);
 		uint64_t elapsed = stm_diff(stm_now(), startTime);
 		double elapsedSec = stm_sec(elapsed);
 		double deltaSec = math::min(stm_sec(deltaTime), 1.0);
+
+		debug::Watch(std::format("Time: {:.2f}", elapsedSec));
 
 		secondTimer -= deltaSec;
 		if (secondTimer <= 0.0)
@@ -251,16 +260,9 @@ int main(int argc, char* argv[])
 
 		SpriteSheetViewRender(drawContext, ssv);
 
-		{
-			char buffer[32];
-			snprintf(buffer, 32, "Frame Time: %0.4fms", stm_sec(frameTicks));
-			SDL_Surface* textSurface = TTF_RenderText_Blended_Wrapped(debugFont, buffer, SDL_Color{ 255, 255, 255, 255 }, canvasX);
-			SDL_Texture* textTexture = SDL_CreateTextureFromSurface(renderer, textSurface);
-			SDL_Rect textRect{ 0, 0, textSurface->w, textSurface->h };
-			SDL_RenderCopy(renderer, textTexture, nullptr, &textRect);
-			SDL_DestroyTexture(textTexture);
-			SDL_FreeSurface(textSurface);
-		}
+		debug::Watch(std::format("Frame MS: {:.3f}", stm_ms(frameTicks)));
+
+		debug::DrawWatch(drawContext);
 
 		SDL_RenderPresent(renderer);
 
@@ -274,6 +276,8 @@ int main(int argc, char* argv[])
 			lastFrameTime = stm_now();
 		}
 	}
+
+	debug::LogWriteToFile("log.txt");
 
 	SDL_DestroyRenderer(renderer);
 	SDL_DestroyWindow(window);

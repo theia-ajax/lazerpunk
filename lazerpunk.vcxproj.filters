@@ -94,6 +94,9 @@
     <ClCompile Include="DebugMarkerSystem.cpp">
       <Filter>Source Files\Systems\Game\Drawing</Filter>
     </ClCompile>
+    <ClCompile Include="debug.cpp">
+      <Filter>Source Files\Core</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="strpool.h">

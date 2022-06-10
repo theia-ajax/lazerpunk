@@ -126,6 +126,17 @@ public:
 		data[head] = {};
 	}
 
+	void remove_at_ordered(size_t index)
+	{
+		ASSERT(head < 0 && "Stack empty.");
+		ASSERT(index < head && "Index out of bounds.");
+
+		head--;
+		for (size_t i = index; i < head; ++i)
+			data[i] = data[i + 1];
+		data[head] = {};
+	}
+
 	T& operator[](size_t index) { return data[index]; }
 	const T& operator[](size_t index) const { return data[index]; }
 
