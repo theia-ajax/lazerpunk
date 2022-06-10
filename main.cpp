@@ -110,7 +110,7 @@ int main(int argc, char* argv[])
 		PlayerShootControl{ 0.15f },
 		Facing{ Direction::Right },
 		Velocity{},
-		FacingSprites{ 10, 9, 8 },
+		FacingSprites{ 13, 11, 12 },
 		SpriteRender{ 10, SpriteFlipFlags::None, vec2::Half },
 		Collider::Box{ vec2::Zero, vec2::One * 0.45f },
 		PhysicsBody{},

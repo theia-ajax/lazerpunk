@@ -123,6 +123,7 @@ SpriteSheet sprite_sheet::Import(const char* sheetFileName, SDL_Renderer* render
 	rapidjson::Document doc;
 	doc.ParseStream(streamWrapper);
 
+	ASSERT(doc.HasMember("image"));
 	const char* imageFilename = doc["image"].GetString();
 	//int margin = doc["margin"].GetInt();
 	int padding = doc["spacing"].GetInt();

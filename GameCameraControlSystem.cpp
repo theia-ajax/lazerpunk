@@ -42,6 +42,7 @@ void GameCameraControlSystem::Update(const GameTime& time) const
 			const auto& gameMap = map::Get(camera.clampViewMap);
 			Bounds2D viewBounds = gameMap.worldBounds;
 			viewBounds.max = viewBounds.max - camera_view::WorldExtents(view);
+			viewBounds = Bounds2D::Grow(viewBounds, { -0.5f, -0.5f });
 			transform.position = viewBounds.ClampPoint(transform.position);
 		}
 	}

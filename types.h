@@ -315,6 +315,10 @@ struct Bounds2D
 	constexpr float& Top() { return min.y; }
 	constexpr float& Bottom() { return max.y; }
 
+	Vec2 Center() const { return vec2::Midpoint(min, max); }
+	Vec2 Size() const { return { max.x - min.x, max.y - min.y }; };
+	Vec2 HalfSize() const { return Size() / 2; }
+
 	constexpr bool ContainsPoint(const Vec2& p) const
 	{
 		return p.x >= min.x && p.x <= max.x && p.y <= max.y && p.y >= min.y;
@@ -338,9 +342,16 @@ struct Bounds2D
 		return Bounds2D{ offset, offset + dimensions };
 	}
 
-	static Bounds2D FromCenter(Vec2 center, Vec2 extents)
+	static Bounds2D FromCenter(Vec2 center, Vec2 halfSize)
 	{
-		return Bounds2D{ center - extents, center + extents };
+		if (halfSize.x < 0) halfSize.x = 0;
+		if (halfSize.y < 0) halfSize.y = 0;
+		return Bounds2D{ center - halfSize, center + halfSize };
+	}
+
+	static Bounds2D Grow(const Bounds2D& bounds, Vec2 halfGrowSize)
+	{
+		return FromCenter(bounds.Center(), bounds.HalfSize() + halfGrowSize);
 	}
 };
 
