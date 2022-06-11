@@ -161,7 +161,7 @@ int main(int argc, char* argv[])
 	}
 #endif
 	uint64_t took = stm_diff(stm_now(), start);
-	debug::Log("main", std::format("Cloning {} enemies took {}ms", ENEMY_COUNT, stm_ms(took)));
+	debug::Log("Cloning {} enemies took {}ms", ENEMY_COUNT, stm_ms(took));
 
 	StringReport report = StrId::QueryStringReport();
 	PrintStringReport(report);
@@ -218,14 +218,19 @@ int main(int argc, char* argv[])
 			physicsSystem->SetMap(map);
 		}
 
+		if (input::GetKeyDown(SDL_SCANCODE_GRAVE))
+			debug::ToggleConsole();
+
 		if (input::GetKeyDown(SDL_SCANCODE_1)) showColliders = !showColliders;
+		if (input::GetKeyDown(SDL_SCANCODE_RETURN) && debug::ConsoleVisible()) debug::Log("");
 
 		uint64_t deltaTime = stm_laptime(&clock);
 		uint64_t elapsed = stm_diff(stm_now(), startTime);
 		double elapsedSec = stm_sec(elapsed);
 		double deltaSec = math::min(stm_sec(deltaTime), 1.0);
 
-		debug::Watch(std::format("Time: {:.2f}", elapsedSec));
+		debug::Watch("Time: {:.2f}", elapsedSec);
+		debug::Watch("Frame MS: {:.3f}", stm_ms(frameTicks));
 
 		secondTimer -= deltaSec;
 		if (secondTimer <= 0.0)
@@ -262,9 +267,8 @@ int main(int argc, char* argv[])
 
 		SpriteSheetViewRender(drawContext, ssv);
 
-		debug::Watch(std::format("Frame MS: {:.3f}", stm_ms(frameTicks)));
-
 		debug::DrawWatch(drawContext);
+		debug::DrawConsole(drawContext, gameTime.dt());
 
 		SDL_RenderPresent(renderer);
 
@@ -371,13 +375,13 @@ namespace internal
 
 void PrintStringReport(const StringReport& report)
 {
-	printf("String Report:\n");
-	printf("\tBlock Memory: %d\n", report.blockSize * report.blockCapacity);
-	printf("\tBlock Usage: %d\n", report.blockSize * report.blockCount);
-	printf("\tEntries: %d / %d\n", report.entryCount, report.entryCapacity);
-	printf("\tStored strings:\n");
+	debug::Log("String Report:");
+	debug::Log("    Block Memory: {:d}", report.blockSize * report.blockCapacity);
+	debug::Log("    Block Usage: {:d}", report.blockSize * report.blockCount);
+	debug::Log("    Entries: {:d} / {:d}", report.entryCount, report.entryCapacity);
+	debug::Log("Stored strings:");
 	for (const auto& s : report.strings)
 	{
-		printf("\t\t%s\n", s.c_str());
+		debug::Log("    {}", s.c_str());
 	}
 }
