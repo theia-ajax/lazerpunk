@@ -4,7 +4,7 @@
 #include "draw.h"
 #include "ecs.h"
 
-struct DebugMarkerSystem : System<DebugMarkerSystem, Transform, DebugMarker, Collider::Box>
+struct ColliderDebugDrawSystem : System<ColliderDebugDrawSystem, Transform, Collider::Box>
 {
 	void DrawMarkers(const DrawContext& ctx) const;
 };

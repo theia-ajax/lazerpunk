@@ -11,9 +11,6 @@
     <Filter Include="Source Files\Systems">
       <UniqueIdentifier>{aef1319a-45d6-4393-843c-d6a6aad04c9d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Source Files\Systems\Core">
-      <UniqueIdentifier>{f25f0bec-2d02-4eb5-9901-417fc30f8646}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Source Files\Systems\Game">
       <UniqueIdentifier>{b4195b9b-ae01-40ae-9996-76cde17f4ee5}</UniqueIdentifier>
     </Filter>
@@ -28,12 +25,6 @@
     </Filter>
     <Filter Include="Source Files\Systems\Game\Input">
       <UniqueIdentifier>{dac57f6d-66cc-433d-a939-1e2a812e5d2f}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Systems\Game\Drawing">
-      <UniqueIdentifier>{6fe5ea0c-59bb-4122-91d1-0aaa6b7827a9}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Systems\Game\Controllers">
-      <UniqueIdentifier>{f2cd7bb9-7413-4382-a8f4-941a795c8231}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -58,44 +49,23 @@
     <ClCompile Include="sprites.cpp">
       <Filter>Source Files\Game</Filter>
     </ClCompile>
-    <ClCompile Include="EntityExpirationSystem.cpp">
-      <Filter>Source Files\Systems\Core</Filter>
-    </ClCompile>
     <ClCompile Include="GatherInputSystem.cpp">
       <Filter>Source Files\Systems\Game\Input</Filter>
-    </ClCompile>
-    <ClCompile Include="GameCameraControlSystem.cpp">
-      <Filter>Source Files\Systems\Game\Controllers</Filter>
-    </ClCompile>
-    <ClCompile Include="PlayerControlSystem.cpp">
-      <Filter>Source Files\Systems\Game\Controllers</Filter>
-    </ClCompile>
-    <ClCompile Include="PlayerShootControlSystem.cpp">
-      <Filter>Source Files\Systems\Game\Controllers</Filter>
-    </ClCompile>
-    <ClCompile Include="ViewSystem.cpp">
-      <Filter>Source Files\Systems\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="SpriteFacingSystem.cpp">
-      <Filter>Source Files\Systems\Game\Drawing</Filter>
-    </ClCompile>
-    <ClCompile Include="SpriteRenderSystem.cpp">
-      <Filter>Source Files\Systems\Game\Drawing</Filter>
-    </ClCompile>
-    <ClCompile Include="GameMapRenderSystem.cpp">
-      <Filter>Source Files\Systems\Game\Drawing</Filter>
-    </ClCompile>
-    <ClCompile Include="EnemyFollowTargetSystem.cpp">
-      <Filter>Source Files\Systems\Game\Controllers</Filter>
     </ClCompile>
     <ClCompile Include="PhysicsSystem.cpp">
       <Filter>Source Files\Systems\Game</Filter>
     </ClCompile>
-    <ClCompile Include="DebugMarkerSystem.cpp">
-      <Filter>Source Files\Systems\Game\Drawing</Filter>
-    </ClCompile>
     <ClCompile Include="debug.cpp">
       <Filter>Source Files\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="ControllerSystems.cpp">
+      <Filter>Source Files\Systems\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="DrawingSystems.cpp">
+      <Filter>Source Files\Systems\Game</Filter>
+    </ClCompile>
+    <ClCompile Include="CoreSystems.cpp">
+      <Filter>Source Files\Systems</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -135,35 +105,8 @@
     <ClInclude Include="sprites.h">
       <Filter>Source Files\Game</Filter>
     </ClInclude>
-    <ClInclude Include="EntityExpirationSystem.h">
-      <Filter>Source Files\Systems\Core</Filter>
-    </ClInclude>
     <ClInclude Include="GatherInputSystem.h">
       <Filter>Source Files\Systems\Game\Input</Filter>
-    </ClInclude>
-    <ClInclude Include="GameCameraControlSystem.h">
-      <Filter>Source Files\Systems\Game\Controllers</Filter>
-    </ClInclude>
-    <ClInclude Include="PlayerControlSystem.h">
-      <Filter>Source Files\Systems\Game\Controllers</Filter>
-    </ClInclude>
-    <ClInclude Include="PlayerShootControlSystem.h">
-      <Filter>Source Files\Systems\Game\Controllers</Filter>
-    </ClInclude>
-    <ClInclude Include="ViewSystem.h">
-      <Filter>Source Files\Systems\Core</Filter>
-    </ClInclude>
-    <ClInclude Include="SpriteFacingSystem.h">
-      <Filter>Source Files\Systems\Game\Drawing</Filter>
-    </ClInclude>
-    <ClInclude Include="SpriteRenderSystem.h">
-      <Filter>Source Files\Systems\Game\Drawing</Filter>
-    </ClInclude>
-    <ClInclude Include="GameMapRenderSystem.h">
-      <Filter>Source Files\Systems\Game\Drawing</Filter>
-    </ClInclude>
-    <ClInclude Include="EnemyFollowTargetSystem.h">
-      <Filter>Source Files\Systems\Game\Controllers</Filter>
     </ClInclude>
     <ClInclude Include="systems.h">
       <Filter>Source Files\Game</Filter>
@@ -174,14 +117,20 @@
     <ClInclude Include="PhysicsSystem.h">
       <Filter>Source Files\Systems\Game</Filter>
     </ClInclude>
-    <ClInclude Include="DebugMarkerSystem.h">
-      <Filter>Source Files\Systems\Game\Drawing</Filter>
-    </ClInclude>
     <ClInclude Include="debug.h">
       <Filter>Source Files\Core</Filter>
     </ClInclude>
     <ClInclude Include="bitfield.h">
       <Filter>Source Files\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="ControllerSystems.h">
+      <Filter>Source Files\Systems\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="DrawingSystems.h">
+      <Filter>Source Files\Systems\Game</Filter>
+    </ClInclude>
+    <ClInclude Include="CoreSystems.h">
+      <Filter>Source Files\Systems</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

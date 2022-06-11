@@ -85,7 +85,7 @@ int main(int argc, char* argv[])
 	auto enemyFollowSystem = EnemyFollowTargetSystem::Register(world);
 	auto nudgeSystem = PhysicsNudgeSystem::Register(world, SystemFlags::Monitor);
 	auto physicsSystem = PhysicsSystem::Register(world);
-	auto debugMarkerSystem = DebugMarkerSystem::Register(world);
+	auto debugMarkerSystem = ColliderDebugDrawSystem::Register(world);
 	auto physicsBodyVelocitySystem = PhysicsBodyVelocitySystem::Register(world);
 
 	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
@@ -181,7 +181,7 @@ int main(int argc, char* argv[])
 	uint64_t frameTicks = 0;
 
 	bool isRunning = true;
-	bool showSpriteSheet = false;
+	bool showColliders = false;
 	while (isRunning)
 	{
 		input::BeginNewFrame();
@@ -217,6 +217,8 @@ int main(int argc, char* argv[])
 			map::Reload(map);
 			physicsSystem->SetMap(map);
 		}
+
+		if (input::GetKeyDown(SDL_SCANCODE_1)) showColliders = !showColliders;
 
 		uint64_t deltaTime = stm_laptime(&clock);
 		uint64_t elapsed = stm_diff(stm_now(), startTime);
@@ -256,7 +258,7 @@ int main(int argc, char* argv[])
 		draw::Clear(drawContext);
 		gameMapRenderSystem->RenderLayers(drawContext, std::array{ StrId("Background") });
 		spriteRenderSystem->Render(drawContext);
-		//debugMarkerSystem->DrawMarkers(drawContext);
+		if (showColliders) debugMarkerSystem->DrawMarkers(drawContext);
 
 		SpriteSheetViewRender(drawContext, ssv);
 

@@ -155,48 +155,35 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="ControllerSystems.cpp" />
+    <ClCompile Include="CoreSystems.cpp" />
     <ClCompile Include="debug.cpp" />
-    <ClCompile Include="DebugMarkerSystem.cpp" />
     <ClCompile Include="draw.cpp" />
-    <ClCompile Include="EnemyFollowTargetSystem.cpp" />
-    <ClCompile Include="EntityExpirationSystem.cpp" />
-    <ClCompile Include="GameCameraControlSystem.cpp" />
+    <ClCompile Include="DrawingSystems.cpp" />
     <ClCompile Include="gamemap.cpp" />
-    <ClCompile Include="GameMapRenderSystem.cpp" />
     <ClCompile Include="impl.cpp" />
     <ClCompile Include="input.cpp" />
     <ClCompile Include="GatherInputSystem.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="PhysicsSystem.cpp" />
-    <ClCompile Include="PlayerControlSystem.cpp" />
-    <ClCompile Include="PlayerShootControlSystem.cpp" />
-    <ClCompile Include="SpriteFacingSystem.cpp" />
-    <ClCompile Include="SpriteRenderSystem.cpp" />
     <ClCompile Include="sprites.cpp" />
     <ClCompile Include="stringid.cpp" />
-    <ClCompile Include="ViewSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bitfield.h" />
     <ClInclude Include="components.h" />
+    <ClInclude Include="ControllerSystems.h" />
+    <ClInclude Include="CoreSystems.h" />
     <ClInclude Include="debug.h" />
-    <ClInclude Include="DebugMarkerSystem.h" />
     <ClInclude Include="draw.h" />
+    <ClInclude Include="DrawingSystems.h" />
     <ClInclude Include="ecs.h" />
-    <ClInclude Include="EnemyFollowTargetSystem.h" />
-    <ClInclude Include="EntityExpirationSystem.h" />
     <ClInclude Include="enumflag.h" />
-    <ClInclude Include="GameCameraControlSystem.h" />
-    <ClInclude Include="GameMapRenderSystem.h" />
     <ClInclude Include="GatherInputSystem.h" />
     <ClInclude Include="input.h" />
     <ClInclude Include="PhysicsSystem.h" />
-    <ClInclude Include="PlayerControlSystem.h" />
-    <ClInclude Include="PlayerShootControlSystem.h" />
     <ClInclude Include="random.h" />
     <ClInclude Include="rnd.h" />
-    <ClInclude Include="SpriteFacingSystem.h" />
-    <ClInclude Include="SpriteRenderSystem.h" />
     <ClInclude Include="sysfont.h" />
     <ClInclude Include="systems.h" />
     <ClInclude Include="gamemap.h" />
@@ -204,7 +191,6 @@
     <ClInclude Include="stringid.h" />
     <ClInclude Include="strpool.h" />
     <ClInclude Include="types.h" />
-    <ClInclude Include="ViewSystem.h" />
   </ItemGroup>
   <ItemGroup>
     <Font Include="assets\PressStart2P-Regular.ttf" />

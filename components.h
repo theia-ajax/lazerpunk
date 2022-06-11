@@ -12,6 +12,11 @@ struct Transform
 	float rotation = 0.0f;
 };
 
+struct Child
+{
+	Entity parent;
+};
+
 struct CameraView
 {
 	Vec2 extents{};

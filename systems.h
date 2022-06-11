@@ -1,18 +1,11 @@
 #pragma once
 
 #include "components.h"
-#include "DebugMarkerSystem.h"
-#include "EnemyFollowTargetSystem.h"
-#include "EntityExpirationSystem.h"
-#include "GameCameraControlSystem.h"
-#include "GameMapRenderSystem.h"
+#include "ControllerSystems.h"
+#include "CoreSystems.h"
+#include "DrawingSystems.h"
 #include "GatherInputSystem.h"
 #include "PhysicsSystem.h"
-#include "PlayerControlSystem.h"
-#include "PlayerShootControlSystem.h"
-#include "SpriteFacingSystem.h"
-#include "SpriteRenderSystem.h"
-#include "ViewSystem.h"
 
 struct PhysicsBodyVelocitySystem : System<PhysicsBodyVelocitySystem, Velocity, PhysicsBody>
 {
