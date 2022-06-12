@@ -15,6 +15,31 @@
 #include "systems.h"
 #include "types.h"
 
+struct MeasureScope
+{
+	MeasureScope() = delete;
+	MeasureScope(const MeasureScope& other) = delete;
+	MeasureScope(MeasureScope&& other) = delete;
+	MeasureScope operator=(const MeasureScope& other) = delete;
+	MeasureScope operator=(MeasureScope&& other) = delete;
+	explicit MeasureScope(const char* label, bool log = false)
+		: label(label)
+		, start(stm_now())
+		, log(log)
+	{}
+	~MeasureScope()
+	{
+		uint64_t delta = stm_diff(stm_now(), start);
+		std::string msg = std::format("{} Duration: {:.3f}ms", label, stm_ms(delta));
+		debug::Watch(msg);
+		if (log)
+			debug::Log(msg);
+	}
+	const char* label;
+	uint64_t start;
+	bool log;
+};
+
 World world;
 
 struct SpriteSheetViewContext
@@ -39,7 +64,7 @@ int main(int argc, char* argv[])
 	TTF_Font* ssvFont = TTF_OpenFont("assets/PressStart2P-Regular.ttf", 8);
 
 	random::GameRandGen rng(stm_now() | (stm_now() << 24));
-
+	
 	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
@@ -47,7 +72,7 @@ int main(int argc, char* argv[])
 	SDL_RenderSetLogicalSize(renderer, canvasX, canvasY);
 	Vec2 viewExtents{ static_cast<float>(canvasX), static_cast<float>(canvasY) };
 
-	InitDevConsole(debug::DevConsoleConfig{ canvasX * 4, canvasY * 4, debugFont, renderer });
+	InitDevConsole(debug::DevConsoleConfig{ 1024, 576, debugFont, renderer });
 	debug::DevConsoleAddCommand("sreport", [] {PrintStringReport(StrId::QueryStringReport()); return 0; });
 
 	SpriteSheet sheet = sprite_sheet::Import("assets/spritesheet.tsj", renderer);
@@ -272,8 +297,14 @@ int main(int argc, char* argv[])
 		SpriteSheetViewRender(drawContext, ssv);
 
 		if (showDebugWatch)
+		{
+			MeasureScope _("debug::DrawWatch");
 			debug::DrawWatch(drawContext);
-		debug::DrawConsole(drawContext, gameTime.dt());
+		}
+		{
+			MeasureScope _("debug::DrawConsole");
+			debug::DrawConsole(drawContext, gameTime.dt());
+		}
 
 		SDL_RenderPresent(renderer);
 

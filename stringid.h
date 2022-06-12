@@ -28,6 +28,7 @@ public:
 	StrId(const std::string& str);
 
 	const char* CStr() const;
+	int Len() const;
 	constexpr bool IsEmpty() const { return RawValue() == kEmptyRaw; }
 	constexpr RawType RawValue() const { return rawValue; };
 

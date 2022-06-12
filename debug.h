@@ -53,6 +53,7 @@ namespace debug
 	void DevConsoleTextInput(char text[32]);
 	void DevConsoleTextEdit(char text[32], int32_t start, int32_t length);
 	void DevConsoleClear();
+	void DevConsoleExecute(const std::string& commandStr);
 	void DrawConsole(const DrawContext& ctx, float dt);
 
 	struct ICaller {
@@ -64,7 +65,7 @@ namespace debug
 	template<int N, typename... Ts> using type_n_t = std::tuple_element_t<N, std::tuple<Ts...>>;
 
 	template<class T, class F>
-	auto parse_to_any(F const& f) -> std::pair<const std::type_index, std::function<std::any(std::string)>>
+	auto parse_string_to_any(F const& f) -> std::pair<const std::type_index, std::function<std::any(std::string)>>
 	{
 		return {
 			std::type_index(typeid(T)),
@@ -77,9 +78,9 @@ namespace debug
 
 	static std::unordered_map parseAnyFuncs
 	{
-		parse_to_any<int>([](std::string s) { return (int)strtol(s.c_str(), nullptr, 10); }),
-		parse_to_any<bool>([](std::string s) { return !s.empty() && (s[0] == 't' || s[0] == 'T' || s[0] == '1'); }),
-		parse_to_any<std::string>([](std::string s) { return s; }),
+		parse_string_to_any<int>([](std::string s) { return (int)strtol(s.c_str(), nullptr, 10); }),
+		parse_string_to_any<bool>([](std::string s) { return !s.empty() && (s[0] == 't' || s[0] == 'T' || s[0] == '1'); }),
+		parse_string_to_any<std::string>([](std::string s) { return s; }),
 	};
 
 	template <class T>
@@ -93,8 +94,8 @@ namespace debug
 	template<typename R, typename... A>
 	struct Caller final : ICaller {
 		template <size_t... Is>
-		auto make_tuple_impl(const std::vector<std::any>& anyArgs, std::index_sequence<Is...>) {
-			
+		auto make_tuple_impl(const std::vector<std::any>& anyArgs, std::index_sequence<Is...>)
+		{
 			return std::make_tuple(std::any_cast<std::decay_t<decltype(std::get<Is>(args))>>(anyArgs.at(Is))...);
 		}
 
@@ -177,28 +178,40 @@ namespace debug
 
 	inline std::string _Log(std::string message) { Log(message); return message; }
 
-	struct CommandProcessor
+	class CommandProcessor
 	{
-		std::unordered_map<StrId, GenericCallback> callbacks;
-
+	public:
 		CommandProcessor()
 			: callbacks()
 		{
-			callbacks["clear"] = []() -> int { DevConsoleClear(); return 0; };
-			callbacks["print"] = [](std::string m) { Log(m); return 0; };
-			callbacks["help"] = [this]
-			{
-				for (const auto cmd : callbacks | std::views::keys)
-					Log(cmd.CStr());
-				return 0;
-			};
+			AddCommand("clear", []() -> int { DevConsoleClear(); return 0; }, "Clears console output.");
+			AddCommand("print", [](std::string m) { Log(m); return 0; }, R"(Prints {:s} to console.)");
+			AddCommand("help", [this] { this->HelpCommand(); return 0; }, R"(Lists available commands.)");
 		}
 
 		template <class Func>
-		void AddCommand(const char* name, Func&& func)
+		void AddCommand(const std::string& name, Func&& func, const std::string& description = "")
 		{
 			callbacks[name] = func;
+			commands[name] = CommandEntry{ StrId(name), description };
 		}
+
+		void HelpCommand();
+
+		bool HasCommand(const std::string& name) const { return callbacks.contains(name); }
+		bool HasCommand(StrId nameId) const { return callbacks.contains(nameId); }
+		const GenericCallback& GetCommand(const std::string& name) const { return callbacks.at(name); }
+		const GenericCallback& GetCommand(StrId nameId) const { return callbacks.at(nameId); }
+		void ParseCommandArgs(const std::string& commandStr, StrId& commandId, std::vector<std::string>& params) const;
+
+	private:
+		struct CommandEntry
+		{
+			StrId commandId;
+			std::string description;
+		};
+		std::unordered_map<StrId, GenericCallback> callbacks;
+		std::unordered_map<StrId, CommandEntry> commands;
 	};
 
 	CommandProcessor& DevConsoleGetCommandProcessor();

@@ -36,6 +36,7 @@ namespace
 
 		StrId::RawType Inject(const char* str, size_t len);
 		const char* CStr(const StrId& strId) const;
+		int Len(const StrId& strId) const;
 		CollatedStrPool Collate() const;
 		constexpr const strpool_t* Raw() const { return &pool; }
 
@@ -60,6 +61,11 @@ namespace
 	const char* StrPool::CStr(const StrId& strId) const
 	{
 		return (strId.IsEmpty()) ? "" : strpool_cstr(&pool, strId.RawValue());
+	}
+
+	int StrPool::Len(const StrId& strId) const
+	{
+		return strpool_length(&pool, strId.RawValue());
 	}
 
 	CollatedStrPool StrPool::Collate() const
@@ -108,6 +114,11 @@ StrId::StrId(const char* str, size_t len) : rawValue(GetStrPool().Inject(str, le
 StrId::StrId(const std::string& str) : StrId(str.c_str(), str.length()) {}
 
 const char* StrId::CStr() const { return GetStrPool().CStr(*this); }
+
+int StrId::Len() const
+{
+	return GetStrPool().Len(*this);
+}
 
 StringReport StrId::QueryStringReport()
 {

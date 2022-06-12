@@ -100,14 +100,17 @@ void debug::DrawWatch(const DrawContext& ctx)
 		watchBuffer << message << std::endl;
 	}
 
-	uint32_t wrapLen = static_cast<uint32_t>(ctx.canvas.x * 1.5f);
+	int canvasX = ctx.canvas.x * 3;
+	int canvasY = ctx.canvas.y * 2;
+
+	uint32_t wrapLen = static_cast<uint32_t>(canvasX);
 	SDL_Surface* textSurface = TTF_RenderText_Blended_Wrapped(
 		ctx.font, watchBuffer.str().c_str(),
 		SDL_Color{ 255, 255, 255, 255 }, wrapLen);
 
 	if (!watchSurface)
 	{
-		watchSurface = SDL_CreateRGBSurfaceWithFormat(0, ctx.canvas.x * 2 + 4, ctx.canvas.y * 2 + 4, textSurface->format->BitsPerPixel, textSurface->format->format);
+		watchSurface = SDL_CreateRGBSurfaceWithFormat(0, canvasX + 4, canvasY + 4, textSurface->format->BitsPerPixel, textSurface->format->format);
 	}
 
 	SDL_Rect bgRect{ 0, 0, textSurface->w + 4, textSurface->h + 4 };
@@ -164,46 +167,6 @@ bool debug::IsConsoleVisible()
 	return sDevCon.visible;
 }
 
-void Execute(const std::string& commandStr)
-{
-	std::vector<std::string> commandStrings;
-	std::regex rx(R"(([^("|')]\S*|("|').+?("|'))\s*)");
-	std::smatch match;
-	std::string current = commandStr;
-	while (std::regex_search(current, match, rx))
-	{
-		std::string argString = match[0];
-		string_util::trim(argString, [](auto ch) { return std::isspace(ch) || ch == '\"' || ch == '\''; });
-
-		commandStrings.emplace_back(argString);
-		current = match.suffix().str();
-	}
-
-	std::string command = commandStrings[0];
-	std::vector<std::string> params{};
-	for (size_t i = 1; i < commandStrings.size(); ++i)
-		params.emplace_back(commandStrings[i]);
-
-	StrId cmdId(command);
-
-	if (sDevCon.commands.callbacks.contains(cmdId))
-	{
-		try
-		{
-			sDevCon.commands.callbacks[cmdId].callParse(params);
-		}
-		catch (const std::out_of_range& e)
-		{
-			(void)e;
-			debug::Log("Unable to match parameters to command '{}'.", command);
-		}
-	}
-	else
-	{
-		debug::Log("Unrecognized command '{}'.", command);
-	}
-}
-
 void debug::DevConsoleKeyInput(int32_t key, bool press, bool repeat)
 {
 	if (!sDevCon.visible)
@@ -226,7 +189,7 @@ void debug::DevConsoleKeyInput(int32_t key, bool press, bool repeat)
 			break;
 		case SDL_SCANCODE_RETURN:
 			if (!sDevCon.input.empty())
-				Execute(sDevCon.input);
+				DevConsoleExecute(sDevCon.input);
 			sDevCon.input.clear();
 			break;
 		case SDL_SCANCODE_LEFT:
@@ -278,6 +241,28 @@ void debug::DevConsoleClear()
 		if (outputSurface)
 			SDL_FreeSurface(outputSurface);
 		outputSurface = nullptr;
+	}
+}
+
+void debug::DevConsoleExecute(const std::string& commandStr)
+{
+	StrId cmdId; std::vector<std::string> params;
+	sDevCon.commands.ParseCommandArgs(commandStr, cmdId, params);
+	if (sDevCon.commands.HasCommand(cmdId))
+	{
+		try
+		{
+			sDevCon.commands.GetCommand(cmdId).callParse(params);
+		}
+		catch (const std::out_of_range& e)
+		{
+			(void)e;
+			debug::Log("Unable to match parameters to command '{}'.", cmdId.CStr());
+		}
+	}
+	else
+	{
+		debug::Log("Unrecognized command '{}'.", cmdId.CStr());
 	}
 }
 
@@ -342,4 +327,38 @@ void debug::DrawConsole(const DrawContext& ctx, float dt)
 debug::CommandProcessor& debug::DevConsoleGetCommandProcessor()
 {
 	return sDevCon.commands;
+}
+
+void debug::CommandProcessor::HelpCommand()
+{
+	auto alignSpaces = [](int len, int desired)
+	{
+		std::string str;
+		str.reserve(desired - len);
+		for (int i = 0; i < desired - len; ++i)
+			str += ' ';
+		return str;
+	};
+	for (const auto [commandId, description] : commands | std::views::values)
+		Log("{}{}: {}", commandId.CStr(), alignSpaces(commandId.Len(), 12), description);
+}
+
+void debug::CommandProcessor::ParseCommandArgs(const std::string& commandStr, StrId& commandId, std::vector<std::string>& params) const
+{
+	std::vector<std::string> commandStrings;
+	std::regex rx(R"(([^("|')]\S*|("|').+?("|'))\s*)");
+	std::smatch match;
+	std::string current = commandStr;
+	while (std::regex_search(current, match, rx))
+	{
+		std::string argString = match[0];
+		string_util::trim(argString, [](auto ch) { return std::isspace(ch) || ch == '\"' || ch == '\''; });
+
+		commandStrings.emplace_back(argString);
+		current = match.suffix().str();
+	}
+
+	commandId = StrId(commandStrings[0]);
+	for (size_t i = 1; i < commandStrings.size(); ++i)
+		params.emplace_back(commandStrings[i]);
 }
