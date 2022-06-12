@@ -376,6 +376,7 @@ enum class SystemFlags
 {
 	None = 0,
 	Monitor = 1 << 0,
+	MonitorGlobalEntityDestroy = 1 << 1,
 };
 
 struct SystemBase  // NOLINT(cppcoreguidelines-special-member-functions)
@@ -389,6 +390,7 @@ struct SystemBase  // NOLINT(cppcoreguidelines-special-member-functions)
 
 	virtual void OnEntityAdded(Entity entity);
 	virtual void OnEntityRemoved(Entity entity);
+	virtual void OnEntityDestroyed(Entity entity);
 
 	SystemFlags Flags() const;
 
@@ -402,6 +404,7 @@ inline World& SystemBase::GetWorld() const { return *world; }
 inline SystemFlags SystemBase::Flags() const { return flags; }
 inline void SystemBase::OnEntityAdded(Entity entity) {}
 inline void SystemBase::OnEntityRemoved(Entity entity) {}
+inline void SystemBase::OnEntityDestroyed(Entity destroyedEntity) {}
 
 
 template <typename T, typename... Components>
@@ -486,6 +489,8 @@ public:
 	{
 		for (const auto& [_, system] : systems)
 		{
+			if (flags::Test(system->Flags(), SystemFlags::MonitorGlobalEntityDestroy))
+				system->OnEntityDestroyed(entity);
 			system->entities.erase(entity);
 		}
 	}
@@ -546,6 +551,9 @@ public:
 
 	Entity CloneEntity(Entity entity)
 	{
+		if (!entity)
+			return 0;
+
 		Entity newEntity = CreateEntity();
 
 		auto [signature, ignored] = entityManager.GetSignature(entity);
@@ -554,11 +562,14 @@ public:
 		{
 			ComponentType nextType = static_cast<ComponentType>(nextTypeIndex);
 
-			if (auto [ptr, size] = componentManager.TryGetComponent(entity, nextType); ptr)
-				AddComponentUntyped(newEntity, nextType, ptr, size);
-
 			signature.set(nextTypeIndex, false);
 			nextTypeIndex = signature.lowest();
+
+			if (nextType == GetComponentType<Prefab>())
+				continue;
+
+			if (auto [ptr, size] = componentManager.TryGetComponent(entity, nextType); ptr)
+				AddComponentUntyped(newEntity, nextType, ptr, size);
 		}
 
 		return newEntity;

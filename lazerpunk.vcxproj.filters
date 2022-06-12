@@ -52,7 +52,7 @@
     <ClCompile Include="GatherInputSystem.cpp">
       <Filter>Source Files\Systems\Game\Input</Filter>
     </ClCompile>
-    <ClCompile Include="PhysicsSystem.cpp">
+    <ClCompile Include="PhysicsSystems.cpp">
       <Filter>Source Files\Systems\Game</Filter>
     </ClCompile>
     <ClCompile Include="debug.cpp">
@@ -114,7 +114,7 @@
     <ClInclude Include="components.h">
       <Filter>Source Files\Game</Filter>
     </ClInclude>
-    <ClInclude Include="PhysicsSystem.h">
+    <ClInclude Include="PhysicsSystems.h">
       <Filter>Source Files\Systems\Game</Filter>
     </ClInclude>
     <ClInclude Include="debug.h">

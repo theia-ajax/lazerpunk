@@ -165,7 +165,7 @@
     <ClCompile Include="input.cpp" />
     <ClCompile Include="GatherInputSystem.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="PhysicsSystem.cpp" />
+    <ClCompile Include="PhysicsSystems.cpp" />
     <ClCompile Include="sprites.cpp" />
     <ClCompile Include="stringid.cpp" />
   </ItemGroup>
@@ -181,7 +181,7 @@
     <ClInclude Include="enumflag.h" />
     <ClInclude Include="GatherInputSystem.h" />
     <ClInclude Include="input.h" />
-    <ClInclude Include="PhysicsSystem.h" />
+    <ClInclude Include="PhysicsSystems.h" />
     <ClInclude Include="random.h" />
     <ClInclude Include="rnd.h" />
     <ClInclude Include="string_util.h" />

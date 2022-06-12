@@ -25,3 +25,11 @@ struct PlayerShootControlSystem : System<PlayerShootControlSystem, GameInput, Tr
 {
 	void Update(const GameTime& time) const;
 };
+
+
+struct SpawnerSystem : System<SpawnerSystem, Transform, Spawner>
+{
+	void Update(const GameTime& time) const;
+	void OnEntityDestroyed(Entity destroyedEntity) override;
+};
+

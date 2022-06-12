@@ -166,3 +166,49 @@ void PlayerShootControlSystem::Update(const GameTime& time) const
 		}
 	}
 }
+#include "input.h"
+void SpawnerSystem::Update(const GameTime& time) const
+{
+
+
+	for (Entity entity : entities)
+	{
+		auto [transform, spawner] = GetArchetype(entity);
+
+		spawner.spawnTimer -= time.dt();
+		if (spawner.spawnTimer <= 0)
+		{
+			if (!spawner.spawnedEnemies.full())
+			{
+				spawner.spawnTimer += spawner.interval;
+				if (Entity spawned = GetWorld().CloneEntity(spawner.prefab))
+				{
+					spawner.spawnedEnemies.push(spawned);
+					if (GetWorld().HasComponent<Transform>(spawned))
+					{
+						auto& [position, scale, rotation] = GetWorld().GetComponent<Transform>(spawned);
+						position = transform.position;
+						rotation = transform.rotation;
+					}
+				}
+			}
+		}
+		if (input::GetKeyDown(SDL_SCANCODE_K))
+			if (!spawner.spawnedEnemies.empty())
+				GetWorld().AddComponent(spawner.spawnedEnemies[0], Expiration{ 0 });
+	}
+}
+
+void SpawnerSystem::OnEntityDestroyed(Entity destroyedEntity)
+{
+	for (Entity entity : entities)
+	{
+		auto [transform, spawner] = GetArchetype(entity);
+		auto search = std::ranges::find_if(spawner.spawnedEnemies, [destroyedEntity](auto e)
+			{
+				return e == destroyedEntity;
+			});
+		if (search != spawner.spawnedEnemies.end())
+			spawner.spawnedEnemies.remove_at(search - spawner.spawnedEnemies.begin());
+	}
+}

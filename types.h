@@ -97,7 +97,7 @@ public:
 
 	void push(const T& elem)
 	{
-		ASSERT(m_head < size() && "Stack full.");
+		ASSERT(m_head < capacity() && "Stack full.");
 		m_mem[m_head++] = elem;
 	}
 
@@ -110,7 +110,7 @@ public:
 
 	void insert(int index, const T& elem)
 	{
-		ASSERT(m_head < size() && "Stack full.")
+		ASSERT(m_head < capacity() && "Stack full.")
 		ASSERT(index <= m_head && "Index out of range.");
 		for (int i = m_head; i > index; --i)
 			m_mem[i] = m_mem[i - 1];
@@ -120,7 +120,7 @@ public:
 
 	void remove_at(int index)
 	{
-		ASSERT(m_head < 0 && "Stack empty.");
+		ASSERT(m_head > 0 && "Stack empty.");
 		ASSERT(index < m_head && "Index out of bounds.");
 		m_head--;
 		if (index != m_head)
@@ -156,7 +156,9 @@ public:
 	constexpr const T* data() const { return m_mem.data(); }
 
 	bool empty() const { return m_head == 0; }
+	bool full() const { return m_head == capacity(); }
 	int size() const { return m_head; }
+	constexpr int capacity() const { return N; }
 
 private:
 	ArrayType m_mem{};

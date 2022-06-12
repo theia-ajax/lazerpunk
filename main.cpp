@@ -62,19 +62,14 @@ int main(int argc, char* argv[])
 		Expiration,
 		Transform, Velocity,
 		GameInputGather, GameInput,
-		PlayerControl,
-		PlayerShootControl,
-		Facing,
-		FacingSprites,
-		CameraView,
-		SpriteRender,
-		GameMapRender,
-		GameCameraControl,
+		PlayerControl, PlayerShootControl,
+		Facing, FacingSprites,
+		CameraView, GameCameraControl,
+		SpriteRender, GameMapRender,
 		EnemyTag,
-		PhysicsBody,
-		Collider::Box, Collider::Circle,
-		DebugMarker,
-		PhysicsNudge>();
+		Spawner,
+		PhysicsBody, Collider::Box, Collider::Circle, PhysicsNudge,
+		DebugMarker>();
 
 	auto expirationSystem = EntityExpirationSystem::Register(world);
 	auto viewSystem = ViewSystem::Register(world);
@@ -90,6 +85,7 @@ int main(int argc, char* argv[])
 	auto physicsSystem = PhysicsSystem::Register(world);
 	auto debugMarkerSystem = ColliderDebugDrawSystem::Register(world);
 	auto physicsBodyVelocitySystem = PhysicsBodyVelocitySystem::Register(world);
+	auto spawnerSystem = SpawnerSystem::Register(world, SystemFlags::MonitorGlobalEntityDestroy);
 
 	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
 
@@ -137,19 +133,42 @@ int main(int argc, char* argv[])
 		PhysicsNudge{ 0.6f, 0.33f, 5.0f },
 		Collider::Box{ vec2::Zero, vec2::One * 0.45f });
 
+	auto findSafeSpot = [physicsSystem](const std::function<Vec2()>& gen, Vec2 halfSize) -> std::pair<bool, Vec2>
+	{
+		Vec2 position;
+		int safetyValve = 100;
+		do
+		{
+			position = gen();
+		} while (physicsSystem->MapSolid(Bounds2D::FromCenter(position, halfSize)) && --safetyValve > 0);
+		return { safetyValve > 0, position };
+	};
+
+	auto randomMapPosition = [map, &rng]()
+	{
+		Bounds2D bounds = map::Get(map).worldBounds;
+		return Vec2{ rng.RangeF(bounds.Left(), bounds.Right()), rng.RangeF(bounds.Top(), bounds.Bottom()) };
+	};
+
+	constexpr int SPAWNER_COUNT = 1;
+	for (auto spawnerEntities = world.CreateEntities<SPAWNER_COUNT>(); Entity spawner : spawnerEntities)
+	{
+		if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
+		{
+			world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, 3.0f, rng.RangeF(3.0f, 10.0f) });
+		}
+	}
+
 	uint64_t start = stm_now();
-	constexpr int ENEMY_COUNT = 50;
+	constexpr int ENEMY_COUNT = 0;
 #if 1
 	for (int i = 0; i < ENEMY_COUNT; ++i)
 	{
 		Entity enemy = world.CloneEntity(enemyPrefab);
-		world.RemoveComponent<Prefab>(enemy);
-		Vec2 position;
-		do
+		if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
 		{
-			position = { rng.RangeF(1.0f, 31.0f), rng.RangeF(1.0f, 15.0f) };
-		} while (physicsSystem->MapSolid(Bounds2D::FromCenter(position, vec2::Half)));
-		world.GetComponent<Transform>(enemy).position = position;
+			world.GetComponent<Transform>(enemy).position = position;
+		}
 	}
 #else
 	for (auto enemyEntities = world.CreateEntities<ENEMY_COUNT>(); Entity enemy : enemyEntities)
@@ -265,10 +284,12 @@ int main(int argc, char* argv[])
 		}
 
 		debug::Watch("FPS: {:d}, Frame: {:.3f}ms", fps, stm_ms(averageFrameTick));
+		debug::Watch("Entities: {:d}", world.GetEntityCount());
 
 		GameTime gameTime(elapsedSec, deltaSec);
 
 		expirationSystem->Update(gameTime);
+		spawnerSystem->Update(gameTime);
 		gatherInputSystem->Update(gameTime);
 		playerControlSystem->Update(gameTime);
 		playerShootSystem->Update(gameTime);

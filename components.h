@@ -144,4 +144,5 @@ struct Spawner
 	Entity prefab{};
 	float interval{};
 	float spawnTimer{};
+	static_stack<Entity, 4> spawnedEnemies{};
 };
