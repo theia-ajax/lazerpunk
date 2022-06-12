@@ -89,7 +89,7 @@ void debug::LogWriteToFile(const char* fileName)
 	}
 }
 
-void debug::DrawWatch(const DrawContext& ctx)
+void debug::DrawWatch(const DrawContext& ctx, Color color)
 {
 	std::stringstream watchBuffer;
 
@@ -100,25 +100,25 @@ void debug::DrawWatch(const DrawContext& ctx)
 		watchBuffer << message << std::endl;
 	}
 
-	int canvasX = ctx.canvas.x * 3;
-	int canvasY = ctx.canvas.y * 2;
+	int padX = 8, padY = 8, halfPadX = padX / 2, halfPadY = padY / 2;
+	int canvasX = ctx.canvas.x * 2;
+	int canvasY = ctx.canvas.y * 4;
 
-	uint32_t wrapLen = static_cast<uint32_t>(canvasX);
+	uint32_t wrapLen = static_cast<uint32_t>(canvasX - halfPadX);
 	SDL_Surface* textSurface = TTF_RenderText_Blended_Wrapped(
 		ctx.font, watchBuffer.str().c_str(),
-		SDL_Color{ 255, 255, 255, 255 }, wrapLen);
+		SDL_Color{ color.r, color.g, color.b, color.a }, wrapLen);
 
 	if (!watchSurface)
 	{
 		watchSurface = SDL_CreateRGBSurfaceWithFormat(0, canvasX + 4, canvasY + 4, textSurface->format->BitsPerPixel, textSurface->format->format);
 	}
 
-	SDL_Rect bgRect{ 0, 0, textSurface->w + 4, textSurface->h + 4 };
-	SDL_Rect textRect{ 0, 0, textSurface->w, textSurface->h };
-	SDL_Rect textDstRect{ 2, 2, textSurface->w, textSurface->h };
+	SDL_Rect bgRect{ 0, 0, textSurface->w + padX, textSurface->h + padY };
+	SDL_Rect textDstRect{ halfPadX, halfPadY, textSurface->w, textSurface->h };
 	SDL_FillRect(watchSurface, nullptr, SDL_MapRGBA(watchSurface->format, 0, 0, 0, 0));
-	SDL_FillRect(watchSurface, &bgRect, SDL_MapRGBA(watchSurface->format, 0, 255, 255, 64));
-	SDL_BlitSurface(textSurface, &textRect, watchSurface, &textDstRect);
+	SDL_FillRect(watchSurface, &bgRect, SDL_MapRGBA(watchSurface->format, 63, 63, 63, 255));
+	SDL_BlitSurface(textSurface, nullptr, watchSurface, &textDstRect);
 	SDL_FreeSurface(textSurface);
 
 	if (!watchTexture)
@@ -132,7 +132,7 @@ void debug::DrawWatch(const DrawContext& ctx)
 	SDL_UnlockTexture(watchTexture);
 
 	SDL_SetRenderDrawBlendMode(ctx.renderer, SDL_BLENDMODE_BLEND);
-	SDL_Rect drawRect{ 0, 0, ctx.canvas.x / 3, ctx.canvas.y / 3 };
+	SDL_Rect drawRect{ 0, 0, ctx.canvas.x / 4, ctx.canvas.y / 2 };
 	SDL_RenderCopy(ctx.renderer, watchTexture, nullptr, &drawRect);
 }
 
@@ -252,17 +252,17 @@ void debug::DevConsoleExecute(const std::string& commandStr)
 	{
 		try
 		{
-			sDevCon.commands.GetCommand(cmdId).callParse(params);
+			(void)sDevCon.commands.GetCommand(cmdId).callParse(params);
 		}
 		catch (const std::out_of_range& e)
 		{
 			(void)e;
-			debug::Log("Unable to match parameters to command '{}'.", cmdId.CStr());
+			Log("Unable to match parameters to command '{}'.", cmdId.CStr());
 		}
 	}
 	else
 	{
-		debug::Log("Unrecognized command '{}'.", cmdId.CStr());
+		Log("Unrecognized command '{}'.", cmdId.CStr());
 	}
 }
 

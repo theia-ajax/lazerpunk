@@ -76,9 +76,11 @@ namespace math
 }
 
 // Just use this with default-constructable, trivially copyable types
-template <typename T, size_t N>
+template <typename T, int N>
 class static_stack
 {
+	using ArrayType = std::array<T, N>;
+
 public:
 	static_stack(std::initializer_list<T> l)
 	{
@@ -90,71 +92,139 @@ public:
 	{
 		for (auto& elem : *this)
 			elem = {};
-		head = 0;
+		m_head = 0;
 	}
 
 	void push(const T& elem)
 	{
-		ASSERT(head < data.size() && "Stack full.");
-		data[head++] = elem;
+		ASSERT(m_head < size() && "Stack full.");
+		m_mem[m_head++] = elem;
 	}
 
 	void pop()
 	{
-		ASSERT(head > 0 && "Stack empty.");
-		--head;
-		data[head] = {};
+		ASSERT(m_head > 0 && "Stack empty.");
+		--m_head;
+		m_mem[m_head] = {};
 	}
 
-	void insert(size_t index, const T& elem)
+	void insert(int index, const T& elem)
 	{
-		ASSERT(head < data.size() && "Stack full.")
-		ASSERT(index <= head && "Index out of range.");
-		for (size_t i = head; i > index; --i)
-			data[i] = data[i - 1];
-		data[index] = elem;
-		++head;
+		ASSERT(m_head < size() && "Stack full.")
+		ASSERT(index <= m_head && "Index out of range.");
+		for (int i = m_head; i > index; --i)
+			m_mem[i] = m_mem[i - 1];
+		m_mem[index] = elem;
+		++m_head;
 	}
 
-	void remove_at(size_t index)
+	void remove_at(int index)
 	{
-		ASSERT(head < 0 && "Stack empty.");
-		ASSERT(index < head && "Index out of bounds.");
-		head--;
-		if (index != head)
-			data[index] = data[head];
-		data[head] = {};
+		ASSERT(m_head < 0 && "Stack empty.");
+		ASSERT(index < m_head && "Index out of bounds.");
+		m_head--;
+		if (index != m_head)
+			m_mem[index] = m_mem[m_head];
+		m_mem[m_head] = {};
 	}
 
-	void remove_at_ordered(size_t index)
+	void remove_at_ordered(int index)
 	{
-		ASSERT(head < 0 && "Stack empty.");
-		ASSERT(index < head && "Index out of bounds.");
+		ASSERT(m_head < 0 && "Stack empty.");
+		ASSERT(index < m_head && "Index out of bounds.");
 
-		head--;
-		for (size_t i = index; i < head; ++i)
-			data[i] = data[i + 1];
-		data[head] = {};
+		m_head--;
+		for (int i = index; i < m_head; ++i)
+			m_mem[i] = m_mem[i + 1];
+		m_mem[m_head] = {};
 	}
 
-	T& operator[](size_t index) { return data[index]; }
-	const T& operator[](size_t index) const { return data[index]; }
+	T& operator[](int index) { return m_mem[index]; }
+	const T& operator[](int index) const { return m_mem[index]; }
 
 	T& top()
 	{
-		ASSERT(head > 0 && "Stack empty.");
-		return data[head - 1];
+		ASSERT(m_head > 0 && "Stack empty.");
+		return m_mem[m_head - 1];
 	}
 
-	T* begin() { return &data[0]; }
-	T* end() { return &data[head]; }
+	typename ArrayType::iterator begin() { return m_mem.begin(); }
+	typename ArrayType::iterator end() { return m_mem.end(); }
+	typename ArrayType::iterator rbegin() { return m_mem.rbegin(); }
+	typename ArrayType::iterator rend() { return m_mem.rend(); }
 
-	bool empty() const { return head == 0; }
-	size_t size() const { return head; }
+	constexpr const T* data() const { return m_mem.data(); }
+
+	bool empty() const { return m_head == 0; }
+	int size() const { return m_head; }
 
 private:
-	std::array<T, N> data{};
-	size_t head{};
+	ArrayType m_mem{};
+	int m_head{};
+};
+
+template <typename T, int N>
+struct ring_buf
+{
+	using ArrayType = std::array<T, N>;
+
+	constexpr int next_index(int idx, int delta) const { return mod(idx + delta, ssize()); }
+	constexpr int ssize() const { return static_cast<int>(m_mem.size()); }
+	constexpr size_t size() const { return m_mem.size(); }
+	constexpr int index() const { return m_index; }
+
+	constexpr T* current() { return &m_mem[m_index]; }
+
+	constexpr T* next()
+	{
+		T* ret = &m_mem[m_index];
+		m_index = next_index(m_index, 1);
+		return ret;
+	}
+
+	constexpr T* next(T* ptr)
+	{
+		ptrdiff_t diff = ptr - m_mem.data();
+		ASSERT(diff >= 0 && diff < m_mem.size() && "Pointer not in ring buffer.");
+		int idx = next_index(static_cast<int>(diff), 1);
+		return &m_mem[idx];
+	}
+
+	constexpr T* prev()
+	{
+		T* ret = &m_mem[m_index];
+		m_index = next_index(m_index, -1);
+		return ret;
+	}
+
+	constexpr T* prev(T* ptr)
+	{
+		ptrdiff_t diff = ptr - m_mem.data();
+		ASSERT(diff >= 0 && diff < m_mem.size() && "Pointer not in ring buffer.");
+		int idx = next_index(static_cast<int>(diff), -1);
+		return &m_mem[idx];
+	}
+
+	T& operator[](int index)
+	{
+		ASSERT(index >= 0 && index < m_mem.size() && "Invalid index.");
+		return m_mem[index];
+	}
+
+	const T& operator[](int index) const
+	{
+		ASSERT(index >= 0 && index < m_mem.size() && "Invalid index.");
+		return m_mem[index];
+	}
+
+	typename ArrayType::iterator begin() { return m_mem.begin(); }
+	typename ArrayType::iterator end() { return m_mem.end(); }
+	typename ArrayType::iterator rbegin() { return m_mem.rbegin(); }
+	typename ArrayType::iterator rend() { return m_mem.rend(); }
+
+private:
+	ArrayType m_mem{};
+	int m_index = 0;
 };
 
 struct Vec2

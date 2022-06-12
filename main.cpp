@@ -15,31 +15,6 @@
 #include "systems.h"
 #include "types.h"
 
-struct MeasureScope
-{
-	MeasureScope() = delete;
-	MeasureScope(const MeasureScope& other) = delete;
-	MeasureScope(MeasureScope&& other) = delete;
-	MeasureScope operator=(const MeasureScope& other) = delete;
-	MeasureScope operator=(MeasureScope&& other) = delete;
-	explicit MeasureScope(const char* label, bool log = false)
-		: label(label)
-		, start(stm_now())
-		, log(log)
-	{}
-	~MeasureScope()
-	{
-		uint64_t delta = stm_diff(stm_now(), start);
-		std::string msg = std::format("{} Duration: {:.3f}ms", label, stm_ms(delta));
-		debug::Watch(msg);
-		if (log)
-			debug::Log(msg);
-	}
-	const char* label;
-	uint64_t start;
-	bool log;
-};
-
 World world;
 
 struct SpriteSheetViewContext
@@ -163,8 +138,8 @@ int main(int argc, char* argv[])
 		Collider::Box{ vec2::Zero, vec2::One * 0.45f });
 
 	uint64_t start = stm_now();
-	constexpr int ENEMY_COUNT = 25;
-#if 0
+	constexpr int ENEMY_COUNT = 50;
+#if 1
 	for (int i = 0; i < ENEMY_COUNT; ++i)
 	{
 		Entity enemy = world.CloneEntity(enemyPrefab);
@@ -200,21 +175,33 @@ int main(int argc, char* argv[])
 
 	cameraControlSystem->SnapFocusToFollow(cameraEntity);
 
-	constexpr double kTargetFrameTime = 1.0 / 60;
-	constexpr double kFixedTimeStepSec = 1.0 / 60.0;
+	int targetFrames = 60;
+	double targetFrameTime = 1.0 / targetFrames;
+	debug::DevConsoleAddCommand("setfps", [&targetFrames, &targetFrameTime](int target)
+		{
+			target = std::max(target, 1);
+			targetFrames = target;
+			targetFrameTime = 1.0 / targetFrames;
+			return targetFrames;
+		});
 
 	uint64_t startTime = stm_now();
 	uint64_t clock = startTime;
 	uint64_t lastFrameTime = clock;
-	double timeAccumulator = 0.0;
 	double secondTimer = 1.0;
 	int frameCountThisSecond = 0;
 	int fps = 0;
 	uint64_t frameTicks = 0;
+	ring_buf<uint64_t, 120> frameTickMeasures{};
+	uint64_t averageFrameTick = 0;
 
 	bool isRunning = true;
 	bool showColliders = false;
-	bool showDebugWatch = _DEBUG;
+#ifdef _DEBUG
+	bool showDebugWatch = true;
+#else
+	bool showDebugWatch = false;
+#endif
 	debug::DevConsoleAddCommand("colliders", [&showColliders] { showColliders = !showColliders; return 0; });
 	debug::DevConsoleAddCommand("watch", [&showDebugWatch](bool show) { showDebugWatch = show; return show; });
 	while (isRunning)
@@ -269,9 +256,15 @@ int main(int argc, char* argv[])
 			SDL_SetWindowTitle(window, buffer);
 		}
 
-		debug::Watch("FPS: {:d}", fps);
-		debug::Watch("Frame MS: {:.3f}", stm_ms(frameTicks));
-		debug::Watch("Time: {:.2f}", elapsedSec);
+		*frameTickMeasures.next() = frameTicks;
+		if (frameTickMeasures.index() == 0)
+		{
+			uint64_t sum = 0;
+			std::ranges::for_each(frameTickMeasures, [&sum](auto v) { sum += v; });
+			averageFrameTick = sum / frameTickMeasures.ssize();
+		}
+
+		debug::Watch("FPS: {:d}, Frame: {:.3f}ms", fps, stm_ms(averageFrameTick));
 
 		GameTime gameTime(elapsedSec, deltaSec);
 
@@ -298,13 +291,9 @@ int main(int argc, char* argv[])
 
 		if (showDebugWatch)
 		{
-			MeasureScope _("debug::DrawWatch");
-			debug::DrawWatch(drawContext);
+			debug::DrawWatch(drawContext, Color{0, 255, 0, 255});
 		}
-		{
-			MeasureScope _("debug::DrawConsole");
-			debug::DrawConsole(drawContext, gameTime.dt());
-		}
+		debug::DrawConsole(drawContext, gameTime.dt());
 
 		SDL_RenderPresent(renderer);
 
@@ -312,9 +301,9 @@ int main(int argc, char* argv[])
 
 		frameTicks = stm_now() - clock;
 
-		if constexpr (kTargetFrameTime > 0)
+		if (targetFrameTime > 0)
 		{
-			while (stm_sec(stm_diff(stm_now(), lastFrameTime)) < kTargetFrameTime) {}
+			while (stm_sec(stm_diff(stm_now(), lastFrameTime)) < targetFrameTime) {}
 			lastFrameTime = stm_now();
 		}
 	}

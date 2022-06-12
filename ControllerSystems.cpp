@@ -76,7 +76,7 @@ void PlayerControlSystem::Update(const GameTime& time) const
 	{
 		auto [input, transform, facing, velocity, control] = GetArchetype(entity);
 
-		control.velocity = input.moveInput * 10.0f;
+		control.velocity = input.moveInput * 3.0f;
 
 		if (input.requestDash)
 		{

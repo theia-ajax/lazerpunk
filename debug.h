@@ -35,7 +35,7 @@ namespace debug
 
 	void LogWriteToFile(const char* fileName);
 
-	void DrawWatch(const DrawContext& ctx);
+	void DrawWatch(const DrawContext& ctx, Color color);
 
 	struct DevConsoleConfig
 	{

@@ -53,9 +53,12 @@ struct Velocity
 	Vec2 velocity{};
 };
 
+using PhysicsLayer = uint16_t;
+
 struct PhysicsBody
 {
 	Vec2 velocity{};
+	PhysicsLayer layer{};
 };
 
 struct Expiration
