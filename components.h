@@ -86,14 +86,14 @@ struct EnemyTag
 
 struct FacingSprites
 {
-	int sideId{};
-	int upId{};
-	int downId{};
+	int16_t sideId{};
+	int16_t upId{};
+	int16_t downId{};
 };
 
 struct SpriteRender
 {
-	int spriteId{};
+	int16_t spriteId{};
 	SpriteFlipFlags flipFlags{};
 	Vec2 origin{};
 };
@@ -144,5 +144,6 @@ struct Spawner
 	Entity prefab{};
 	float interval{};
 	float spawnTimer{};
-	static_stack<Entity, 4> spawnedEnemies{};
+	int32_t maxAlive{};
+	static_stack<Entity, 59> spawnedEnemies{}; // 59 makes the total size of the struct 256 bytes
 };

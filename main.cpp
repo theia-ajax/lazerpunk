@@ -155,7 +155,7 @@ int main(int argc, char* argv[])
 	{
 		if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
 		{
-			world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, 3.0f, rng.RangeF(3.0f, 10.0f) });
+			world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, 0.5f, 1, 128 });
 		}
 	}
 
@@ -329,6 +329,7 @@ int main(int argc, char* argv[])
 		}
 	}
 
+	PrintStringReport(StrId::QueryStringReport());
 	debug::LogWriteToFile("log.txt");
 
 	SDL_DestroyRenderer(renderer);

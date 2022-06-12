@@ -210,9 +210,6 @@ public:
 		return componentArray[entityToIndexMap[entity]];
 	}
 
-	T* begin() { return &componentArray[0]; }
-	T* end() { return &componentArray[size]; }
-
 	void OnEntityDestroyed(Entity entity) override
 	{
 		if (entityToIndexMap.contains(entity))
@@ -487,11 +484,11 @@ public:
 
 	void OnEntityDestroyed(Entity entity)
 	{
-		for (const auto& [_, system] : systems)
+		for (const auto& system : systems | std::views::values)
 		{
 			if (flags::Test(system->Flags(), SystemFlags::MonitorGlobalEntityDestroy))
 				system->OnEntityDestroyed(entity);
-			system->entities.erase(entity);
+			RemoveEntityFromSystem(entity, system);
 		}
 	}
 
@@ -501,20 +498,30 @@ public:
 		{
 			if (const auto& systemSignature = signatures[systemId]; systemSignature.Matches(entitySignature))
 			{
-				if (flags::Test(system->Flags(), SystemFlags::Monitor) && !system->entities.contains(entity))
-					system->OnEntityAdded(entity);
-
-				system->entities.insert(entity);
-
+				AddEntityToSystem(entity, system);
 			}
 			else
 			{
-				if (flags::Test(system->Flags(), SystemFlags::Monitor) && system->entities.contains(entity))
-					system->OnEntityRemoved(entity);
-
-				system->entities.erase(entity);
+				RemoveEntityFromSystem(entity, system);
 			}
 		}
+	}
+
+private:
+	static void AddEntityToSystem(Entity entity, const std::shared_ptr<SystemBase>& system)
+	{
+		if (flags::Test(system->Flags(), SystemFlags::Monitor) && !system->entities.contains(entity))
+			system->OnEntityAdded(entity);
+
+		system->entities.insert(entity);
+	}
+
+	static void RemoveEntityFromSystem(Entity entity, const std::shared_ptr<SystemBase>& system)
+	{
+		if (flags::Test(system->Flags(), SystemFlags::Monitor) && system->entities.contains(entity))
+			system->OnEntityRemoved(entity);
+
+		system->entities.erase(entity);
 	}
 
 private:

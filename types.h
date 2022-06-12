@@ -97,20 +97,20 @@ public:
 
 	void push(const T& elem)
 	{
-		ASSERT(m_head < capacity() && "Stack full.");
+		ASSERT(!full() && "Stack full.");
 		m_mem[m_head++] = elem;
 	}
 
 	void pop()
 	{
-		ASSERT(m_head > 0 && "Stack empty.");
+		ASSERT(!empty() && "Stack empty.");
 		--m_head;
 		m_mem[m_head] = {};
 	}
 
 	void insert(int index, const T& elem)
 	{
-		ASSERT(m_head < capacity() && "Stack full.")
+		ASSERT(!full() && "Stack full.")
 		ASSERT(index <= m_head && "Index out of range.");
 		for (int i = m_head; i > index; --i)
 			m_mem[i] = m_mem[i - 1];
@@ -120,7 +120,7 @@ public:
 
 	void remove_at(int index)
 	{
-		ASSERT(m_head > 0 && "Stack empty.");
+		ASSERT(!empty() && "Stack empty.");
 		ASSERT(index < m_head && "Index out of bounds.");
 		m_head--;
 		if (index != m_head)
@@ -130,7 +130,7 @@ public:
 
 	void remove_at_ordered(int index)
 	{
-		ASSERT(m_head < 0 && "Stack empty.");
+		ASSERT(!empty() && "Stack empty.");
 		ASSERT(index < m_head && "Index out of bounds.");
 
 		m_head--;
@@ -139,12 +139,28 @@ public:
 		m_mem[m_head] = {};
 	}
 
+	void remove_element(T* elem)
+	{
+		ASSERT(!empty() && "Stack empty.");
+		ptrdiff_t elemIdx = elem - data();
+		ASSERT(elemIdx >= 0 && elemIdx < m_head && "Pointer not in range.");
+		remove_at(static_cast<int>(elemIdx));
+	}
+
+	void remove_element_ordered(T* elem)
+	{
+		ASSERT(!empty() && "Stack empty.");
+		ptrdiff_t elemIdx = elem - data();
+		ASSERT(elemIdx >= 0 && elemIdx < m_head && "Pointer not in range.");
+		remove_at_ordered(static_cast<int>(elemIdx));
+	}
+
 	T& operator[](int index) { return m_mem[index]; }
 	const T& operator[](int index) const { return m_mem[index]; }
 
 	T& top()
 	{
-		ASSERT(m_head > 0 && "Stack empty.");
+		ASSERT(!empty() && "Stack empty.");
 		return m_mem[m_head - 1];
 	}
 
@@ -155,8 +171,8 @@ public:
 
 	constexpr const T* data() const { return m_mem.data(); }
 
-	bool empty() const { return m_head == 0; }
-	bool full() const { return m_head == capacity(); }
+	bool empty() const { return m_head <= 0; }
+	bool full() const { return m_head >= capacity(); }
 	int size() const { return m_head; }
 	constexpr int capacity() const { return N; }
 

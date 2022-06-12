@@ -167,30 +167,51 @@ void PlayerShootControlSystem::Update(const GameTime& time) const
 	}
 }
 #include "input.h"
+
+namespace spawner
+{
+	Entity Spawn(World& world, const Spawner& spawner, Vec2 position, float rotation)
+	{
+		if (Entity spawned = world.CloneEntity(spawner.prefab))
+		{
+			if (world.HasComponent<Transform>(spawned))
+			{
+				auto& transform = world.GetComponent<Transform>(spawned);
+				transform.position = position;
+				transform.rotation = rotation;
+			}
+			return spawned;
+		}
+		return 0;
+	}
+}
+
 void SpawnerSystem::Update(const GameTime& time) const
 {
-
-
 	for (Entity entity : entities)
 	{
 		auto [transform, spawner] = GetArchetype(entity);
 
-		spawner.spawnTimer -= time.dt();
+		if (spawner.spawnTimer > 0)
+			spawner.spawnTimer -= time.dt();
+
 		if (spawner.spawnTimer <= 0)
 		{
-			if (!spawner.spawnedEnemies.full())
+			if (spawner.maxAlive)
 			{
-				spawner.spawnTimer += spawner.interval;
-				if (Entity spawned = GetWorld().CloneEntity(spawner.prefab))
+				if (!spawner.spawnedEnemies.full() && spawner.spawnedEnemies.size() < spawner.maxAlive)
 				{
-					spawner.spawnedEnemies.push(spawned);
-					if (GetWorld().HasComponent<Transform>(spawned))
+					spawner.spawnTimer += spawner.interval;
+					if (Entity spawned = spawner::Spawn(GetWorld(), spawner, transform.position, transform.rotation))
 					{
-						auto& [position, scale, rotation] = GetWorld().GetComponent<Transform>(spawned);
-						position = transform.position;
-						rotation = transform.rotation;
+						spawner.spawnedEnemies.push(spawned);
 					}
 				}
+			}
+			else
+			{
+				spawner.spawnTimer += spawner.interval;
+				spawner::Spawn(GetWorld(), spawner, transform.position, transform.rotation);
 			}
 		}
 		if (input::GetKeyDown(SDL_SCANCODE_K))
@@ -203,12 +224,11 @@ void SpawnerSystem::OnEntityDestroyed(Entity destroyedEntity)
 {
 	for (Entity entity : entities)
 	{
-		auto [transform, spawner] = GetArchetype(entity);
-		auto search = std::ranges::find_if(spawner.spawnedEnemies, [destroyedEntity](auto e)
-			{
-				return e == destroyedEntity;
-			});
-		if (search != spawner.spawnedEnemies.end())
-			spawner.spawnedEnemies.remove_at(search - spawner.spawnedEnemies.begin());
+		if (auto [transform, spawner] = GetArchetype(entity); spawner.maxAlive > 0)
+		{
+			auto search = std::ranges::find_if(spawner.spawnedEnemies, [destroyedEntity](auto e) { return e == destroyedEntity; });
+			if (search != spawner.spawnedEnemies.end())
+				spawner.spawnedEnemies.remove_element(&(*search));
+		}
 	}
 }

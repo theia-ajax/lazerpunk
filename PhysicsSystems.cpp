@@ -160,6 +160,7 @@ void PhysicsNudgeSystem::OnEntityAdded(Entity entity)
 
 void PhysicsNudgeSystem::OnEntityRemoved(Entity entity)
 {
-	static_cast<void>(std::ranges::remove_if(entityVector, [entity](auto e) { return e == entity; }));
+	auto [first, last] = std::ranges::remove_if(entityVector, [entity](auto e) { return e == entity; });
+	entityVector.erase(first, last);
 }
 
