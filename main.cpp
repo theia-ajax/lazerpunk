@@ -36,24 +36,27 @@ int main(int argc, char* argv[])
 	stm_setup();
 	TTF_Init();
 	TTF_Font* debugFont = TTF_OpenFont("assets/PressStart2P-Regular.ttf", 16);
+	TTF_Font* ssvFont = TTF_OpenFont("assets/PressStart2P-Regular.ttf", 8);
 
 	random::GameRandGen rng(stm_now() | (stm_now() << 24));
 
 	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
-	SDL_RenderSetLogicalSize(renderer, 256, 144);
-
-	int canvasX, canvasY;
-	SDL_RenderGetLogicalSize(renderer, &canvasX, &canvasY);
+	constexpr int canvasX = 256, canvasY = 144;
+	SDL_RenderSetLogicalSize(renderer, canvasX, canvasY);
 	Vec2 viewExtents{ static_cast<float>(canvasX), static_cast<float>(canvasY) };
+
+	InitDevConsole(debug::DevConsoleConfig{ canvasX * 4, canvasY * 4, debugFont, renderer });
+	debug::DevConsoleAddCommand("sreport", [] {PrintStringReport(StrId::QueryStringReport()); return 0; });
 
 	SpriteSheet sheet = sprite_sheet::Import("assets/spritesheet.tsj", renderer);
 	//SpriteSheet sheet = sprite_sheet::Create(renderer, "assets/spritesheet.png", 16, 16, 1);;
 	GameMapHandle map = map::Load("assets/testmap.tmj");
 
 	DrawContext drawContext{ renderer, sheet, debugFont, {canvasX, canvasY} };
-	SpriteSheetViewContext ssv{ sheet, debugFont, canvasX, canvasY };
+	SpriteSheetViewContext ssv{ sheet, ssvFont, canvasX, canvasY };
+	debug::DevConsoleAddCommand("ssv", [&ssv] { ssv.visible = !ssv.visible; return 0; });
 
 	world.RegisterComponents<
 		Expiration,
@@ -92,6 +95,13 @@ int main(int argc, char* argv[])
 
 	physicsSystem->SetMap(map);
 	enemyFollowSystem->targetEntity = playerEntity;
+
+	debug::DevConsoleAddCommand("reload", [&]
+		{
+			map::Reload(map);
+			physicsSystem->SetMap(map);
+			return 0;
+		});
 
 	world.AddComponents(cameraEntity,
 		Transform{},
@@ -163,9 +173,6 @@ int main(int argc, char* argv[])
 	uint64_t took = stm_diff(stm_now(), start);
 	debug::Log("Cloning {} enemies took {}ms", ENEMY_COUNT, stm_ms(took));
 
-	StringReport report = StrId::QueryStringReport();
-	PrintStringReport(report);
-
 	cameraControlSystem->SnapFocusToFollow(cameraEntity);
 
 	constexpr double kTargetFrameTime = 1.0 / 60;
@@ -182,6 +189,9 @@ int main(int argc, char* argv[])
 
 	bool isRunning = true;
 	bool showColliders = false;
+	bool showDebugWatch = _DEBUG;
+	debug::DevConsoleAddCommand("colliders", [&showColliders] { showColliders = !showColliders; return 0; });
+	debug::DevConsoleAddCommand("watch", [&showDebugWatch](bool show) { showDebugWatch = show; return show; });
 	while (isRunning)
 	{
 		input::BeginNewFrame();
@@ -198,6 +208,13 @@ int main(int argc, char* argv[])
 				case SDL_KEYDOWN:
 				case SDL_KEYUP:
 					input::KeyDownEvent(event.key.keysym.scancode, event.type == SDL_KEYDOWN, event.key.repeat);
+					debug::DevConsoleKeyInput(event.key.keysym.scancode, event.type == SDL_KEYDOWN, event.key.repeat);
+					break;
+				case SDL_TEXTINPUT:
+					debug::DevConsoleTextInput(event.text.text);
+					break;
+				case SDL_TEXTEDITING:
+					debug::DevConsoleTextEdit(event.edit.text, event.edit.start, event.edit.length);
 					break;
 				}
 			}
@@ -207,30 +224,13 @@ int main(int argc, char* argv[])
 			isRunning = false;
 		}
 
-		if (input::GetKeyDown(SDL_SCANCODE_F1))
-		{
-			ssv.visible = !ssv.visible;
-		}
-
-		if (input::GetKeyDown(SDL_SCANCODE_F5))
-		{
-			map::Reload(map);
-			physicsSystem->SetMap(map);
-		}
-
 		if (input::GetKeyDown(SDL_SCANCODE_GRAVE))
-			debug::ToggleConsole();
-
-		if (input::GetKeyDown(SDL_SCANCODE_1)) showColliders = !showColliders;
-		if (input::GetKeyDown(SDL_SCANCODE_RETURN) && debug::ConsoleVisible()) debug::Log("");
+			debug::ToggleDevConsole();
 
 		uint64_t deltaTime = stm_laptime(&clock);
 		uint64_t elapsed = stm_diff(stm_now(), startTime);
 		double elapsedSec = stm_sec(elapsed);
 		double deltaSec = math::min(stm_sec(deltaTime), 1.0);
-
-		debug::Watch("Time: {:.2f}", elapsedSec);
-		debug::Watch("Frame MS: {:.3f}", stm_ms(frameTicks));
 
 		secondTimer -= deltaSec;
 		if (secondTimer <= 0.0)
@@ -243,6 +243,10 @@ int main(int argc, char* argv[])
 			snprintf(buffer, 32, "Lazer Punk (FPS:%d)", fps);
 			SDL_SetWindowTitle(window, buffer);
 		}
+
+		debug::Watch("FPS: {:d}", fps);
+		debug::Watch("Frame MS: {:.3f}", stm_ms(frameTicks));
+		debug::Watch("Time: {:.2f}", elapsedSec);
 
 		GameTime gameTime(elapsedSec, deltaSec);
 
@@ -267,7 +271,8 @@ int main(int argc, char* argv[])
 
 		SpriteSheetViewRender(drawContext, ssv);
 
-		debug::DrawWatch(drawContext);
+		if (showDebugWatch)
+			debug::DrawWatch(drawContext);
 		debug::DrawConsole(drawContext, gameTime.dt());
 
 		SDL_RenderPresent(renderer);

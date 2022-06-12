@@ -132,6 +132,9 @@
     <ClInclude Include="CoreSystems.h">
       <Filter>Source Files\Systems</Filter>
     </ClInclude>
+    <ClInclude Include="string_util.h">
+      <Filter>Source Files\Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\spritesheet.tsj">

@@ -3,11 +3,14 @@
 #include <format>
 #include <fstream>
 #include <queue>
-#include "types.h"
+#include <ranges>
+#include <regex>
+#include <sstream>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
-
 #include "draw.h"
+#include "string_util.h"
+#include "types.h"
 
 namespace
 {
@@ -20,10 +23,49 @@ namespace
 	{
 		bool visible{};
 		Vec2 position{};
+		SDL_Point canvas{};
+		TTF_Font* font{};
+		std::string input{};
+		int32_t inputCursor{};
+		int32_t inputSelectionLen{};
+		SDL_Surface* inputSurface{};
+		std::string inputCache{};
+		float cursorTimer{};
+		std::vector<SDL_Surface*> outputSurfaces{};
+		std::vector<std::string> output{};
 		SDL_Surface* surface{};
-		SDL_Surface* textSurface{};
 		SDL_Texture* texture{};
-	} console;
+		debug::CommandProcessor commands;
+	} sDevCon;
+
+	void DevConsoleUpdateInputPromptSurface()
+	{
+		if (sDevCon.inputSurface)
+			SDL_FreeSurface(sDevCon.inputSurface);
+
+		std::string inputString = "> " + sDevCon.input;
+		sDevCon.inputSurface = TTF_RenderText_Blended(sDevCon.font, inputString.c_str(), { 0, 255, 255, 255 });
+	}
+
+	void DevConsoleWrite(const std::string& message)
+	{
+		if (sDevCon.outputSurfaces.back() != nullptr)
+		{
+			SDL_FreeSurface(sDevCon.outputSurfaces.back());
+			sDevCon.outputSurfaces.back() = nullptr;
+		}
+
+		for (size_t i = sDevCon.outputSurfaces.size() - 1; i > 0; --i)
+		{
+			sDevCon.outputSurfaces[i] = sDevCon.outputSurfaces[i - 1];
+		}
+
+		sDevCon.outputSurfaces[0] = TTF_RenderText_Blended_Wrapped(
+			sDevCon.font, (!message.empty()) ? message.c_str() : "\n",
+			{ 255, 255, 255, 255 },
+			static_cast<uint32_t>(sDevCon.canvas.x));
+	}
+
 }
 
 void debug::internal::WriteWatch(const std::string& message)
@@ -35,11 +77,7 @@ void debug::internal::WriteLog(const std::string& message)
 {
 	fprintf(stdout, "%s\n", message.c_str());
 	s_log.emplace_back(message);
-	if (console.textSurface)
-	{
-		SDL_FreeSurface(console.textSurface);
-		console.textSurface = nullptr;
-	}
+	DevConsoleWrite(message);
 }
 
 void debug::LogWriteToFile(const char* fileName)
@@ -53,27 +91,19 @@ void debug::LogWriteToFile(const char* fileName)
 
 void debug::DrawWatch(const DrawContext& ctx)
 {
-	constexpr size_t WATCH_BUFFER_SIZE = 1024;
-	char buffer[WATCH_BUFFER_SIZE];
-	size_t remaining = WATCH_BUFFER_SIZE;
-	char* head = buffer;
+	std::stringstream watchBuffer;
 
 	while (!s_watchQueue.empty())
 	{
 		std::string message = s_watchQueue.front();
 		s_watchQueue.pop();
-
-		int written = snprintf(head, remaining, "%s\n", message.c_str());
-
-		if (written < 0)
-			break;
-
-		head += written;
-		remaining -= written;
+		watchBuffer << message << std::endl;
 	}
 
 	uint32_t wrapLen = static_cast<uint32_t>(ctx.canvas.x * 1.5f);
-	SDL_Surface* textSurface = TTF_RenderText_Blended_Wrapped(ctx.font, buffer, SDL_Color{ 255, 255, 255, 255 }, wrapLen);
+	SDL_Surface* textSurface = TTF_RenderText_Blended_Wrapped(
+		ctx.font, watchBuffer.str().c_str(),
+		SDL_Color{ 255, 255, 255, 255 }, wrapLen);
 
 	if (!watchSurface)
 	{
@@ -103,72 +133,213 @@ void debug::DrawWatch(const DrawContext& ctx)
 	SDL_RenderCopy(ctx.renderer, watchTexture, nullptr, &drawRect);
 }
 
-void debug::ToggleConsole()
+void debug::InitDevConsole(const DevConsoleConfig& config)
 {
-	console.visible = !console.visible;
+	sDevCon.canvas = { config.canvasX, config.canvasY };
+	sDevCon.font = config.font;
+	sDevCon.outputSurfaces.resize(config.historyLength);
+	sDevCon.surface = SDL_CreateRGBSurfaceWithFormat(0, sDevCon.canvas.x, sDevCon.canvas.y, 32, SDL_PIXELFORMAT_ARGB8888);
+	sDevCon.texture = SDL_CreateTextureFromSurface(config.renderer, sDevCon.surface);
+	DevConsoleUpdateInputPromptSurface();
 }
 
-bool debug::ConsoleVisible()
+
+void debug::ToggleDevConsole()
 {
-	return console.visible;
+	sDevCon.visible = !sDevCon.visible;
+
+	if (sDevCon.visible)
+	{
+		SDL_StartTextInput();
+
+	}
+	else
+	{
+		SDL_StopTextInput();
+	}
+}
+
+bool debug::IsConsoleVisible()
+{
+	return sDevCon.visible;
+}
+
+void Execute(const std::string& commandStr)
+{
+	std::vector<std::string> commandStrings;
+	std::regex rx(R"(([^("|')]\S*|("|').+?("|'))\s*)");
+	std::smatch match;
+	std::string current = commandStr;
+	while (std::regex_search(current, match, rx))
+	{
+		std::string argString = match[0];
+		string_util::trim(argString, [](auto ch) { return std::isspace(ch) || ch == '\"' || ch == '\''; });
+
+		commandStrings.emplace_back(argString);
+		current = match.suffix().str();
+	}
+
+	std::string command = commandStrings[0];
+	std::vector<std::string> params{};
+	for (size_t i = 1; i < commandStrings.size(); ++i)
+		params.emplace_back(commandStrings[i]);
+
+	StrId cmdId(command);
+
+	if (sDevCon.commands.callbacks.contains(cmdId))
+	{
+		try
+		{
+			sDevCon.commands.callbacks[cmdId].callParse(params);
+		}
+		catch (const std::out_of_range& e)
+		{
+			(void)e;
+			debug::Log("Unable to match parameters to command '{}'.", command);
+		}
+	}
+	else
+	{
+		debug::Log("Unrecognized command '{}'.", command);
+	}
+}
+
+void debug::DevConsoleKeyInput(int32_t key, bool press, bool repeat)
+{
+	if (!sDevCon.visible)
+		return;
+
+	if (press)
+	{
+		switch (key)
+		{
+		case SDL_SCANCODE_BACKSPACE:
+			if (sDevCon.inputCursor > 0)
+			{
+				sDevCon.input.erase(sDevCon.inputCursor - 1, 1);
+				sDevCon.inputCursor--;
+			}
+			break;
+		case SDL_SCANCODE_DELETE:
+			if (!sDevCon.input.empty())
+				sDevCon.input.erase(sDevCon.inputCursor, 1);
+			break;
+		case SDL_SCANCODE_RETURN:
+			if (!sDevCon.input.empty())
+				Execute(sDevCon.input);
+			sDevCon.input.clear();
+			break;
+		case SDL_SCANCODE_LEFT:
+			sDevCon.inputCursor--;
+			break;
+		case SDL_SCANCODE_RIGHT:
+			sDevCon.inputCursor++;
+			break;
+		}
+
+		sDevCon.cursorTimer = 0;
+		sDevCon.inputCursor = std::clamp(sDevCon.inputCursor, 0, static_cast<int32_t>(sDevCon.input.size()));
+	}
+}
+
+void debug::DevConsoleTextInput(char text[32])
+{
+	if (!sDevCon.visible)
+		return;
+
+	char* c = text;
+	while (*c)
+	{
+		if (*c != '`')
+		{
+			sDevCon.input.insert(sDevCon.inputCursor, c);
+			sDevCon.inputCursor++;
+		}
+		sDevCon.inputCursor = std::clamp(sDevCon.inputCursor, 0, static_cast<int32_t>(sDevCon.input.size()));
+		c++;
+	}
+	sDevCon.cursorTimer = 0;
+}
+
+void debug::DevConsoleTextEdit(char text[32], int32_t start, int32_t length)
+{
+#if 0
+	if (!console.visible)
+		return;
+
+	console.input.insert(start, text);
+#endif
+}
+
+void debug::DevConsoleClear()
+{
+	for (auto& outputSurface : sDevCon.outputSurfaces)
+	{
+		if (outputSurface)
+			SDL_FreeSurface(outputSurface);
+		outputSurface = nullptr;
+	}
 }
 
 void debug::DrawConsole(const DrawContext& ctx, float dt)
 {
-	SDL_Point canvas{ ctx.canvas.x * 4, ctx.canvas.y * 3 };
+	if (!sDevCon.surface)
+		return;
 
-	float target = (!console.visible) ? 0.0f : static_cast<float>(canvas.y - 20);
-	console.position.y = math::MoveTo(console.position.y, target, canvas.y * dt);
+	float height = ctx.canvas.y * 3 / 4.0f;
+	float target = (!sDevCon.visible) ? 0.0f : height;
+	sDevCon.position.y = math::MoveTo(sDevCon.position.y, target, height * dt * 4);
 
-	if (!console.textSurface)
+	if (sDevCon.position.y < 0.1f && !sDevCon.visible)
+		return;
+
+	if (sDevCon.input != sDevCon.inputCache)
 	{
-		int32_t ssize = static_cast<int32_t>(s_log.size());
-		int32_t start = std::max(ssize - 22, 0);
-		std::vector<char> buffer(1024);
-		char* head = buffer.data();
-		size_t remaining = buffer.capacity();
+		sDevCon.inputCache = sDevCon.input;
+		DevConsoleUpdateInputPromptSurface();
+	}
 
-		for (int32_t i = start; i < ssize && remaining > 0; ++i)
+	SDL_Rect canvasRect{ 0, 0, sDevCon.canvas.x, sDevCon.canvas.y };
+
+	SDL_FillRect(sDevCon.surface, &canvasRect, SDL_MapRGBA(sDevCon.surface->format, 0, 0, 0, 127));
+
+	sDevCon.cursorTimer += dt;
+
+	SDL_Rect promptRect{ 0, sDevCon.surface->h - 24, sDevCon.surface->w, sDevCon.surface->h };
+	SDL_Rect promptTextRect = promptRect;
+	promptTextRect.y += 4;
+	SDL_FillRect(sDevCon.surface, &promptRect, SDL_MapRGBA(sDevCon.surface->format, 0, 0, 0, 255));
+	SDL_Rect cursorRect{ sDevCon.inputCursor * 16 + 32, promptTextRect.y, 16, 16 };
+
+	if (std::fmod(sDevCon.cursorTimer / 0.5f, 2.0f) < 1.0f)
+		SDL_FillRect(sDevCon.surface, &cursorRect, SDL_MapRGBA(sDevCon.surface->format, 0, 0, 255, 255));
+	SDL_BlitSurface(sDevCon.inputSurface, nullptr, sDevCon.surface, &promptTextRect);
+
+	{
+		int index = 0;
+		int textY = promptRect.y;
+		while (textY > 0 && sDevCon.outputSurfaces[index])
 		{
-			int32_t written = snprintf(head, remaining, "%s\n", s_log[i].c_str());
-
-			if (written < 0)
-				break;
-
-			head += written;
-			remaining -= written;
+			SDL_Surface* out = sDevCon.outputSurfaces[index++];
+			textY -= out->h + 1;
+			SDL_Rect dstRect{ 0, textY, out->w, out->h };
+			SDL_BlitSurface(out, nullptr, sDevCon.surface, &dstRect);
 		}
-
-		console.textSurface = TTF_RenderText_Blended_Wrapped(
-			ctx.font, buffer.data(), { 255, 255, 255, 255 }, static_cast<uint32_t>(canvas.x * 3.0f / 4));
-	}
-
-	SDL_Rect canvasRect{ 0, 0, canvas.x, canvas.y };
-
-	if (!console.surface)
-	{
-		console.surface = SDL_CreateRGBSurfaceWithFormat(0, canvas.x, canvas.y,
-			console.textSurface->format->BitsPerPixel, console.textSurface->format->format);
-	}
-
-	SDL_Rect textRect{ 0, 0, console.textSurface->w, console.textSurface->h };
-	SDL_Rect textDstRect{ 0, 4 * 16, textRect.w, textRect.h };
-	SDL_FillRect(console.surface, &canvasRect, SDL_MapRGBA(console.surface->format, 0, 0, 0, 127));
-	SDL_BlitSurface(console.textSurface, &textRect, console.surface, &textDstRect);
-
-	if (!console.texture)
-	{
-		console.texture = SDL_CreateTextureFromSurface(ctx.renderer, console.surface);
 	}
 
 	void* pixels; int pitch;
-	SDL_LockTexture(console.texture, nullptr, &pixels, &pitch);
-	SDL_UpdateTexture(console.texture, nullptr, console.surface->pixels, console.surface->pitch);
-	SDL_UnlockTexture(console.texture);
+	SDL_LockTexture(sDevCon.texture, nullptr, &pixels, &pitch);
+	SDL_UpdateTexture(sDevCon.texture, nullptr, sDevCon.surface->pixels, sDevCon.surface->pitch);
+	SDL_UnlockTexture(sDevCon.texture);
 
-	SDL_Rect srcRect{ 0, 0, static_cast<int>(canvas.x * 3 / 4.0f), canvas.y};
+	SDL_Rect srcRect{ 0, 0, sDevCon.canvas.x, sDevCon.canvas.y };
 	SDL_Rect drawRect{
-		static_cast<int>(console.position.x), static_cast<int>(console.position.y - canvas.y),
-		static_cast<int>(ctx.canvas.x * 3 / 4.0f), ctx.canvas.y};
-	SDL_RenderCopy(ctx.renderer, console.texture, &srcRect, &drawRect);
+		static_cast<int>(sDevCon.position.x), static_cast<int>(sDevCon.position.y - ctx.canvas.y),
+		ctx.canvas.x, ctx.canvas.y };
+	SDL_RenderCopy(ctx.renderer, sDevCon.texture, nullptr, &drawRect);
+}
+
+debug::CommandProcessor& debug::DevConsoleGetCommandProcessor()
+{
+	return sDevCon.commands;
 }

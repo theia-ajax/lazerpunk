@@ -377,3 +377,4 @@ private:
 	const double elapsedSec;
 	const double deltaSec;
 };
+

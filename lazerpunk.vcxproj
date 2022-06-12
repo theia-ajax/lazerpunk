@@ -184,6 +184,7 @@
     <ClInclude Include="PhysicsSystem.h" />
     <ClInclude Include="random.h" />
     <ClInclude Include="rnd.h" />
+    <ClInclude Include="string_util.h" />
     <ClInclude Include="sysfont.h" />
     <ClInclude Include="systems.h" />
     <ClInclude Include="gamemap.h" />
