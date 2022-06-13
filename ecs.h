@@ -4,7 +4,6 @@
 // https://austinmorlan.com/posts/entity_component_system
 
 
-#include <bitset>
 #include <memory>
 #include <optional>
 #include <queue>
