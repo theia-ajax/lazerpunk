@@ -408,7 +408,7 @@ template <typename T, typename... Components>
 struct System : SystemBase
 {
 	static auto Register(World& world, SystemFlags systemFlags = SystemFlags::None);
-	std::tuple<Components&...> GetArchetype(Entity entity) const;
+	auto GetArchetype(Entity entity) const;
 };
 
 class World;
@@ -680,7 +680,7 @@ public:
 	}
 
 	template <typename... Components>
-	std::tuple<Components&...> GetComponents(Entity entity)
+	auto GetComponents(Entity entity)
 	{
 		return GetComponentsHelper<Components...>(entity);
 	}
@@ -762,24 +762,30 @@ private:
 	template <typename T>
 	auto GetFirstHelper(Entity entity) -> std::tuple<T&>
 	{
-		if constexpr (is_reject_component_v<T>)
-			return IgnoredDummyRef<T>();
-		else
-			return GetComponent<T>(entity);
+		return GetComponent<T>(entity);
 	}
 
 	template <typename Head, typename... Tail>
-	std::tuple<Head&, Tail&...> GetComponentsHelper(Entity entity)
+	auto GetComponentsHelper(Entity entity)
 	{
-		auto first = GetFirstHelper<Head>(entity);
-		if constexpr (sizeof...(Tail) > 0)
+		if constexpr (is_reject_component_v<Head>)
 		{
-			std::tuple<Tail&...> rest = GetComponentsHelper<Tail...>(entity);
-			return std::tuple_cat(first, rest);
+			if constexpr (sizeof...(Tail) > 0)
+			{
+				return GetComponentsHelper<Tail...>(entity);
+			}
+			return std::tuple();
 		}
 		else
 		{
-			return first;
+			if constexpr (sizeof...(Tail) > 0)
+			{
+				return std::tuple_cat(GetFirstHelper<Head>(entity), GetComponentsHelper<Tail...>(entity));
+			}
+			else
+			{
+				return GetFirstHelper<Head>(entity);
+			}
 		}
 	}
 
@@ -796,7 +802,7 @@ auto System<T, Components...>::Register(World& world, SystemFlags systemFlags)
 }
 
 template <typename T, typename ... Components>
-std::tuple<Components&...> System<T, Components...>::GetArchetype(Entity entity) const
+auto System<T, Components...>::GetArchetype(Entity entity) const
 {
 	return GetWorld().template GetComponents<Components...>(entity);
 }
