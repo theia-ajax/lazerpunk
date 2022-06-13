@@ -47,7 +47,7 @@ int main(int argc, char* argv[])
 	SDL_RenderSetLogicalSize(renderer, canvasX, canvasY);
 	Vec2 viewExtents{ static_cast<float>(canvasX), static_cast<float>(canvasY) };
 
-	InitDevConsole(debug::DevConsoleConfig{ 1024, 576, debugFont, renderer });
+	InitDevConsole(debug::DevConsoleConfig{ 256 * 6, 144 * 6, debugFont, renderer });
 	debug::DevConsoleAddCommand("sreport", [] {PrintStringReport(StrId::QueryStringReport()); return 0; });
 
 	SpriteSheet sheet = sprite_sheet::Import("assets/spritesheet.tsj", renderer);
@@ -136,11 +136,13 @@ int main(int argc, char* argv[])
 	auto findSafeSpot = [physicsSystem](const std::function<Vec2()>& gen, Vec2 halfSize) -> std::pair<bool, Vec2>
 	{
 		Vec2 position;
-		int safetyValve = 100;
+		int safetyValve = 2;
 		do
 		{
 			position = gen();
 		} while (physicsSystem->MapSolid(Bounds2D::FromCenter(position, halfSize)) && --safetyValve > 0);
+		if (safetyValve <= 0)
+			debug::Log("Warning: unable to find safe spawn location within iteration limit.");
 		return { safetyValve > 0, position };
 	};
 
@@ -150,16 +152,15 @@ int main(int argc, char* argv[])
 		return Vec2{ rng.RangeF(bounds.Left(), bounds.Right()), rng.RangeF(bounds.Top(), bounds.Bottom()) };
 	};
 
-	constexpr int SPAWNER_COUNT = 1;
+	constexpr int SPAWNER_COUNT = 5;
 	for (auto spawnerEntities = world.CreateEntities<SPAWNER_COUNT>(); Entity spawner : spawnerEntities)
 	{
 		if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
 		{
-			world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, 0.5f, 1, 128 });
+			world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, rng.RangeF(5.0f, 10.0f), rng.RangeF(1, 10), 6 });
 		}
 	}
 
-	uint64_t start = stm_now();
 	constexpr int ENEMY_COUNT = 0;
 #if 1
 	for (int i = 0; i < ENEMY_COUNT; ++i)
@@ -189,8 +190,6 @@ int main(int argc, char* argv[])
 			Collider::Box{ vec2::Zero, vec2::One * 0.45f });
 	}
 #endif
-	uint64_t took = stm_diff(stm_now(), start);
-	debug::Log("Cloning {} enemies took {}ms", ENEMY_COUNT, stm_ms(took));
 
 	cameraControlSystem->SnapFocusToFollow(cameraEntity);
 

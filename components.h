@@ -12,6 +12,14 @@ struct Transform
 	float rotation = 0.0f;
 };
 
+struct LocalTransform
+{
+	Vec2 position = vec2::Zero;
+	Vec2 scale = vec2::One;
+	float_t rotation = 0.0f;
+	Entity parent;
+};
+
 struct Child
 {
 	Entity parent;
