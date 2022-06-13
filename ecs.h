@@ -23,19 +23,7 @@ using ComponentType = uint8_t;
 constexpr ComponentType kMaxComponents = 64;
 
 template <typename T>
-struct Reject
-{
-	using Component = T;
-	uint64_t dummy;
-};
-
-static uint64_t sIgnoredData = 0xFEEDBEEFDEADBEEF;
-
-template <typename T>
-constexpr Reject<typename T::Component>& IgnoredDummyRef()
-{
-	return reinterpret_cast<Reject<typename T::Component>&>(sIgnoredData);
-}
+struct Reject { using Component = T; };
 
 template <class T, template <class...> class Template>
 struct is_specialization : std::false_type {};
@@ -760,33 +748,21 @@ private:
 	}
 
 	template <typename T>
-	auto GetFirstHelper(Entity entity) -> std::tuple<T&>
+	auto GetFirstHelper(Entity entity)
 	{
-		return GetComponent<T>(entity);
+		if constexpr (is_reject_component_v<T>)
+			return std::tuple<>();
+		else
+			return std::tuple<T&>(GetComponent<T>(entity));
 	}
 
 	template <typename Head, typename... Tail>
 	auto GetComponentsHelper(Entity entity)
 	{
-		if constexpr (is_reject_component_v<Head>)
-		{
-			if constexpr (sizeof...(Tail) > 0)
-			{
-				return GetComponentsHelper<Tail...>(entity);
-			}
-			return std::tuple();
-		}
+		if constexpr (sizeof...(Tail) > 0)
+			return std::tuple_cat(GetFirstHelper<Head>(entity), GetComponentsHelper<Tail...>(entity));
 		else
-		{
-			if constexpr (sizeof...(Tail) > 0)
-			{
-				return std::tuple_cat(GetFirstHelper<Head>(entity), GetComponentsHelper<Tail...>(entity));
-			}
-			else
-			{
-				return GetFirstHelper<Head>(entity);
-			}
-		}
+			return GetFirstHelper<Head>(entity);
 	}
 
 private:
