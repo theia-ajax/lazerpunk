@@ -731,19 +731,19 @@ private:
 			RegisterComponentsHelper<Tail...>();
 	}
 
-	template <typename Head, typename... Tail>
-	std::tuple<Head&, Tail&...> AddComponentsHelper(Entity entity, Head head, Tail... tail)
+	template <typename T>
+	auto AddComponentHelper(Entity entity, const T& component)
 	{
-		std::tuple<Head&> first = AddComponent(entity, head);
+		return std::tuple<T&>(AddComponent(entity, component));
+	}
+
+	template <typename Head, typename... Tail>
+	std::tuple<Head&, Tail&...> AddComponentsHelper(Entity entity, const Head& head, const Tail&... tail)
+	{
 		if constexpr (sizeof...(tail) > 0)
-		{
-			std::tuple<Tail&...> rest = AddComponentsHelper(entity, tail...);
-			return std::tuple_cat(first, rest);
-		}
+			return std::tuple_cat(std::tuple<Head&>(AddComponent(entity, head)), AddComponentsHelper(entity, tail...));
 		else
-		{
-			return first;
-		}
+			return std::tuple<Head&>(AddComponent(entity, head));
 	}
 
 	template <typename T>
