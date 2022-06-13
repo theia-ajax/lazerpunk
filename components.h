@@ -5,6 +5,12 @@
 #include "sprites.h"
 #include "gamemap.h"
 
+// Core
+struct Expiration
+{
+	float secRemaining{};
+};
+
 struct Transform
 {
 	Vec2 position = vec2::Zero;
@@ -12,31 +18,17 @@ struct Transform
 	float rotation = 0.0f;
 };
 
-struct LocalTransform
+struct Velocity
 {
-	Vec2 position = vec2::Zero;
-	Vec2 scale = vec2::One;
-	float_t rotation = 0.0f;
-	Entity parent;
+	Vec2 velocity{};
 };
 
-struct Child
+struct Facing
 {
-	Entity parent;
+	Direction facing{};
 };
 
-struct CameraView
-{
-	Vec2 extents{};
-	float scale = 16.0f;
-	Vec2 center{};
-};
-
-namespace camera_view
-{
-	inline Vec2 WorldExtents(const CameraView& view) { return view.extents / view.scale; }
-}
-
+// Input
 struct GameInputGather
 {
 	enum_array<bool, Direction> moveDown{};
@@ -51,29 +43,26 @@ struct GameInput
 	bool requestShoot{};
 };
 
-struct Facing
+// Camera
+struct CameraView
 {
-	Direction facing{};
+	Vec2 extents{};
+	float scale = 16.0f;
+	Vec2 center{};
 };
 
-struct Velocity
+namespace camera_view {
+	inline Vec2 WorldExtents(const CameraView& view) { return view.extents / view.scale; }
+}
+
+struct GameCameraControl
 {
-	Vec2 velocity{};
+	GameMapHandle clampViewMap{};
+	Entity followTarget{};
+	Bounds2D followBounds;
 };
 
-using PhysicsLayer = uint16_t;
-
-struct PhysicsBody
-{
-	Vec2 velocity{};
-	PhysicsLayer layer{};
-};
-
-struct Expiration
-{
-	float secRemaining{};
-};
-
+// Player
 struct PlayerControl
 {
 	Vec2 velocity{};
@@ -87,11 +76,65 @@ struct PlayerShootControl
 	float cooldownRemaining{};
 };
 
+// Enemies
 struct EnemyTag
 {
 	
 };
 
+struct Spawner
+{
+	Entity prefab{};
+	float interval{};
+	float spawnTimer{};
+	int32_t maxAlive{};
+	static_stack<Entity, 59> spawnedEnemies{}; // 59 makes the total size of the struct 256 bytes
+};
+
+// Physics/Collision
+struct PhysicsBody
+{
+	Vec2 velocity{};
+};
+
+struct Collider
+{
+	struct Box
+	{
+		Vec2 center{};
+		Vec2 extents = vec2::Half;
+	};
+
+	struct Circle
+	{
+		Vec2 center{};
+		float radius = 0.5f;
+	};
+};
+
+struct PhysicsLayer
+{
+	uint16_t layer;
+};
+
+struct Trigger
+{
+};
+
+struct DebugMarker
+{
+	Color color{};
+};
+
+struct PhysicsNudge
+{
+	float radius = 0.5f;
+	float minStrength = 0.01f;
+	float maxStrength{};
+	Vec2 velocity{};
+};
+
+// Rendering
 struct FacingSprites
 {
 	int16_t sideId{};
@@ -109,49 +152,4 @@ struct SpriteRender
 struct GameMapRender
 {
 	GameMapHandle mapHandle;
-};
-
-struct GameCameraControl
-{
-	GameMapHandle clampViewMap{};
-	Entity followTarget{};
-	Bounds2D followBounds;
-};
-
-
-struct Collider
-{
-	struct Box
-	{
-		Vec2 center{};
-		Vec2 extents = vec2::Half;
-	};
-
-	struct Circle
-	{
-		Vec2 center{};
-		float radius = 0.5f;
-	};
-};
-
-struct DebugMarker
-{
-	Color color{};
-};
-
-struct PhysicsNudge
-{
-	float radius = 0.5f;
-	float minStrength = 0.01f;
-	float maxStrength{};
-	Vec2 velocity{};
-};
-
-struct Spawner
-{
-	Entity prefab{};
-	float interval{};
-	float spawnTimer{};
-	int32_t maxAlive{};
-	static_stack<Entity, 59> spawnedEnemies{}; // 59 makes the total size of the struct 256 bytes
 };
