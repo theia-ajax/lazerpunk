@@ -145,3 +145,15 @@ constexpr bool operator<(const bitfield<N, T>& a, const bitfield<N, T>& b)
 	}
 	return false;
 }
+
+template <size_t N>
+struct std::formatter<bitfield<N, uint64_t>> : std::formatter<std::string>
+{
+	auto format(bitfield<N, uint64_t> bf, format_context& ctx) const
+	{
+		if constexpr (bitfield<N, uint64_t>::CHUNK_COUNT == 1)
+			return std::formatter<string>::format(std::format("{:016x}", bf.chunks[0]), ctx);
+		else if constexpr (bitfield<N, uint64_t>::CHUNK_COUNT == 2)
+			return std::formatter<string>::format(std::format("{:016x}{:016x}", bf.chunks[1], bf.chunks[0]), ctx);
+	}
+};

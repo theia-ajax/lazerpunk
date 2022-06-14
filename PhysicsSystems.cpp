@@ -116,7 +116,7 @@ void PhysicsBodyVelocitySystem::Update(const GameTime& time)
 
 void PhysicsNudgeSystem::Update(const GameTime& time)
 {
-	std::vector<Entity>& entityVector = GetEntities();
+	const std::vector<Entity>& entityVector = GetEntities();
 
 	for (Entity entity : entityVector)
 	{

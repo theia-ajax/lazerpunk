@@ -188,18 +188,7 @@ namespace spawner
 
 void SpawnerSystem::Update(const GameTime& time)
 {
-	auto sourceQuery = GetWorld().CreateQuery<SpawnSource>(
-		QueryCallbacks{
-			.onEntityMatch = {},
-			.onEntityUnmatch = [this](Entity e)
-			{
-				auto [source] = GetWorld().GetComponent<SpawnSource>(e);
-				for (Entity entity : GetEntities())
-				{
-					if (entity == source)
-						GetWorld().GetComponent<Spawner>(entity).spawnedEnemies--;
-				}}
-			});
+	
 
 	for (Entity entity : GetEntities())
 	{
@@ -231,6 +220,18 @@ void SpawnerSystem::Update(const GameTime& time)
 
 		if (input::GetKeyDown(SDL_SCANCODE_K))
 		{
+			auto sourceQuery = GetWorld().CreateQuery<SpawnSource, Reject<Prefab>>(
+				QueryCallbacks{
+					.onEntityMatch = {},
+					.onEntityUnmatch = [this](Entity e)
+					{
+						auto [source] = GetWorld().GetComponent<SpawnSource>(e);
+						for (Entity entity : GetEntities())
+						{
+							if (entity == source)
+								GetWorld().GetComponent<Spawner>(entity).spawnedEnemies--;
+						}}
+				});
 			for (Entity spawned : sourceQuery->GetEntities())
 			{
 				if (auto [source] = GetWorld().GetComponent<SpawnSource>(spawned); source == entity)

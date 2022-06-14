@@ -138,7 +138,7 @@ int main(int argc, char* argv[])
 	auto findSafeSpot = [physicsSystem](const std::function<Vec2()>& gen, Vec2 halfSize) -> std::pair<bool, Vec2>
 	{
 		Vec2 position;
-		int safetyValve = 2;
+		int safetyValve = 25;
 		do
 		{
 			position = gen();
@@ -154,7 +154,7 @@ int main(int argc, char* argv[])
 		return Vec2{ rng.RangeF(bounds.Left(), bounds.Right()), rng.RangeF(bounds.Top(), bounds.Bottom()) };
 	};
 
-	constexpr int SPAWNER_COUNT = 1;
+	constexpr int SPAWNER_COUNT = 10;
 	for (auto spawnerEntities = world.CreateEntities<SPAWNER_COUNT>(); Entity spawner : spawnerEntities)
 	{
 		if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)

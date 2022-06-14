@@ -4,6 +4,7 @@
 // https://austinmorlan.com/posts/entity_component_system
 
 
+#include <format>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -12,8 +13,24 @@
 #include <set>
 #include <stack>
 #include <unordered_map>
+
 #include "bitfield.h"
 #include "types.h"
+
+#ifndef ENABLE_ECS_LOGGING
+#define ENABLE_ECS_LOGGING 0
+#endif
+
+#if ENABLE_ECS_LOGGING
+#include "debug.h"
+
+namespace ecs
+{
+	using debug::Log;
+}
+#else
+namespace ecs { template <typename... Args> void Log(std::string_view fmt, Args&&... args) {} }
+#endif
 
 class World;
 using Entity = int32_t;
@@ -43,28 +60,30 @@ struct Prefab {};
 // Signatures represent which 
 struct Signature
 {
-	bitfield<kMaxComponents> signature;
-	bitfield<kMaxComponents> ignored;
+	using Layer = bitfield<kMaxComponents>;
 
-	void reset() { signature.reset(); ignored.reset(); }
+	Layer require;
+	Layer reject;
+
+	void reset() { require.reset(); reject.reset(); }
 	bool Matches(const Signature& other) const
 	{
-		return (signature & other.signature) == signature &&
-			(ignored & other.signature).empty();
+		return (require & other.require) == require &&
+			(reject & other.require).empty();
 	}
 
 	Signature& operator|=(const Signature& other)
 	{
-		signature |= other.signature;
-		ignored |= other.ignored;
+		require |= other.require;
+		reject |= other.reject;
 		return *this;
 	}
 };
 
-inline bool operator==(const Signature& a, const Signature& b) { return a.Matches(b); }
+inline bool operator==(const Signature& a, const Signature& b) { return a.require == b.require && a.reject == b.reject; }
 inline bool operator<(const Signature& a, const Signature& b)
 {
-	return (a.signature < b.signature) || ((a.signature == b.signature) && a.ignored < b.ignored);
+	return (a.require < b.require) || ((a.require == b.require) && a.reject < b.reject);
 }
 
 template<>
@@ -73,17 +92,31 @@ struct std::hash<Signature>
 	size_t operator()(const Signature& signature) const noexcept
 	{
 		size_t res = 17;
-		res = res * 31 + signature.signature.hash();
-		res = res * 31 + signature.ignored.hash();
+		res = res * 31 + signature.require.hash();
+		res = res * 31 + signature.reject.hash();
 		return res;
 	}
 };
+
+template<>
+struct std::formatter<Signature> : std::formatter<std::string>
+{
+	auto format(Signature s, format_context& ctx) const
+	{
+		size_t hash = std::hash<Signature>()(s);
+		return formatter<string>::format(std::format("{}", hash), ctx);
+	}
+};
+
+void LogSignature(const World& world, const char* label, Signature signature);
+void LogCompareSignatures(const World& world, const char* label1, Signature signature1, const char* label2, Signature signature2);
 
 // Tracks available entity indices and signatures of active entities
 class EntityManager
 {
 public:
-	EntityManager()
+	EntityManager(World& world)
+		: world(world)
 	{
 		for (Entity entity = kMaxEntities - 1; entity >= 1; --entity)
 			availableEntities.push(entity);
@@ -148,7 +181,11 @@ public:
 		for (Entity entity : activeEntities)
 		{
 			if (Signature entitySignature = GetSignature(entity); signature.Matches(entitySignature))
+			{
+				ecs::Log("New Query {} matches Entity {}", signature, entity);
+				LogCompareSignatures(world, "New Query Match", signature, "Entity", entitySignature);
 				entities.emplace_back(entity);
+			}
 		}
 	}
 
@@ -156,6 +193,7 @@ private:
 	std::stack<Entity> availableEntities{};
 	std::set<Entity> activeEntities;
 	std::array<Signature, kMaxEntities + 1> signatures{};
+	World& world;
 };
 
 class IComponentArray
@@ -272,7 +310,14 @@ class ComponentManager
 		return reinterpret_cast<ComponentId>(typeid(T).name());
 	}
 
+	template <typename T>
+	static constexpr const char* GetComponentName()
+	{
+		return typeid(T).name();
+	}
+
 public:
+
 	template <typename T>
 	auto RegisterComponent() -> std::enable_if_t<std::is_trivially_copyable_v<T>, ComponentId>
 	{
@@ -280,6 +325,7 @@ public:
 		ASSERT(!componentTypes.contains(componentId) && "Component already registered.");
 		componentTypes.insert({ componentId, nextComponentType });
 		componentIds.insert({ nextComponentType, componentId });
+		componentNames.insert({ nextComponentType, GetComponentName<T>() });
 		componentArrays.insert({ componentId, std::make_shared<ComponentArray<T>>() });
 		++nextComponentType;
 		return componentId;
@@ -291,6 +337,12 @@ public:
 		ComponentId componentId = GetComponentId<T>();
 		ASSERT(componentTypes.contains(componentId) && "Component not registered.");
 		return componentTypes.at(componentId);
+	}
+
+	const char* GetComponentTypeName(ComponentType componentType) const
+	{
+		ASSERT(componentNames.contains(componentType) && "Component type not in name table.");
+		return componentNames.at(componentType) + 7;
 	}
 
 	template <typename T>
@@ -346,6 +398,24 @@ public:
 		return BuildSignatureHelper<Components...>();
 	}
 
+	std::string BuildSignatureLayerString(Signature::Layer layer) const
+	{
+		std::string ret;
+		ret.reserve(128);
+
+		while (!layer.empty())
+		{
+			int typeIndex = layer.lowest();
+			ComponentType ctype = static_cast<ComponentType>(typeIndex);
+			ret += GetComponentTypeName(ctype);
+			layer.set(typeIndex, false);
+			if (!layer.empty())
+				ret += ", ";
+		}
+
+		return ret;
+	}
+
 private:
 	template <typename Head, typename... Tail>
 	Signature BuildSignatureHelper() const
@@ -354,12 +424,12 @@ private:
 		if constexpr (is_reject_component_v<Head>)
 		{
 			ComponentType ignoredType = GetComponentType<typename Head::Component>();
-			signature.ignored.set(ignoredType, true);
+			signature.reject.set(ignoredType, true);
 		}
 		else
 		{
 			ComponentType componentType = GetComponentType<Head>();
-			signature.signature.set(componentType, true);
+			signature.require.set(componentType, true);
 		}
 		if constexpr (sizeof...(Tail) > 0)
 		{
@@ -371,6 +441,7 @@ private:
 private:
 	std::unordered_map<ComponentId, ComponentType> componentTypes{};
 	std::unordered_map<ComponentType, ComponentId> componentIds{};
+	std::unordered_map<ComponentType, const char*> componentNames{};
 	std::unordered_map<ComponentId, std::shared_ptr<IComponentArray>> componentArrays;
 	ComponentType nextComponentType{};
 
@@ -390,12 +461,12 @@ private:
 };
 
 class QueryManager;
+using QueryId = int32_t;
 
 struct QueryCallbacks
 {
 	std::function<void(Entity)> onEntityMatch{};
 	std::function<void(Entity)> onEntityUnmatch{};
-	std::function<bool(Entity, Entity)> querySortPred{};
 
 	void OnEntityMatch(Entity entity) const { if (onEntityMatch) onEntityMatch(entity); }
 	void OnEntityUnmatch(Entity entity) const { if (onEntityUnmatch) onEntityUnmatch(entity); }
@@ -416,11 +487,32 @@ public:
 		, world(world) {}
 
 	World& GetWorld() const { return *world; }
-	std::vector<Entity>& GetEntities() { return entities; }
+	const std::vector<Entity>& GetEntities() { return entities; }
 	Signature GetSignature() const { return signature; }
 	void OnEntityMatch(Entity entity) const { callbacks.OnEntityMatch(entity); }
 	void OnEntityUnmatch(Entity entity) const { callbacks.OnEntityUnmatch(entity); }
-	std::function<bool(Entity, Entity)> SortPredicate() const { return callbacks.querySortPred; }
+
+	void InitializeEntityList(const EntityManager& entityManager)
+	{
+		ASSERT(entities.empty() && "Query already contained entities before initializing entity list");
+		entityManager.GetEntitiesMatchingSignature(signature, entities);
+		if (!entities.empty())
+			ecs::Log("Initialized query and added {} entities to it.", entities.size());
+		for (Entity addedEntity : entities)
+			OnEntityMatch(addedEntity);
+	}
+
+	void AddEntity(Entity entity)
+	{
+		entities.insert(std::ranges::upper_bound(entities, entity), entity);
+		OnEntityMatch(entity);
+	}
+
+	void RemoveEntity(Entity entity)
+	{
+		entities.erase(std::ranges::lower_bound(entities, entity));
+		OnEntityUnmatch(entity);
+	}
 
 protected:
 	std::vector<Entity> entities;
@@ -502,7 +594,7 @@ struct System : SystemBase
 	auto GetSystemQuery();
 	static auto Register(World& world, SystemFlags systemFlags = SystemFlags::None);
 	auto GetArchetype(Entity entity) const;
-	std::vector<Entity>& GetEntities();
+	const std::vector<Entity>& GetEntities();
 };
 
 class World;
@@ -585,7 +677,8 @@ class World
 {
 public:
 	World()
-		:  queryManager(*this)
+		: entityManager(*this)
+		, queryManager(*this)
 	{
 		RegisterComponent<Prefab>();
 	}
@@ -616,17 +709,24 @@ public:
 
 		Entity newEntity = CreateEntity();
 
-		auto [signature, ignored] = entityManager.GetSignature(entity);
-		int nextTypeIndex = signature.lowest();
+		Signature signature = entityManager.GetSignature(entity);
+		ecs::Log("Clone Entity {} -> {}", entity, newEntity, signature);
+		ecs::Log("    Require: {}", componentManager.BuildSignatureLayerString(signature.require));
+		ecs::Log("    Reject: {}", componentManager.BuildSignatureLayerString(signature.reject));
+		int nextTypeIndex = signature.require.lowest();
 		while (nextTypeIndex >= 0)
 		{
 			ComponentType nextType = static_cast<ComponentType>(nextTypeIndex);
 
-			signature.set(nextTypeIndex, false);
-			nextTypeIndex = signature.lowest();
+			signature.require.set(nextTypeIndex, false);
+			nextTypeIndex = signature.require.lowest();
 
 			if (nextType == GetComponentType<Prefab>())
 				continue;
+
+			const char* nextTypeName = componentManager.GetComponentTypeName(nextType);
+			ecs::Log("    Add Component<{}>", nextTypeName);
+
 
 			if (auto [ptr, size] = componentManager.TryGetComponent(entity, nextType); ptr)
 				AddComponentUntyped(newEntity, nextType, ptr, size);
@@ -661,7 +761,7 @@ public:
 
 		Signature signature = entityManager.GetSignature(entity);
 		Signature oldSignature = signature;
-		signature.signature.set(componentManager.GetComponentType<T>(), true);
+		signature.require.set(componentManager.GetComponentType<T>(), true);
 		entityManager.SetSignature(entity, signature);
 
 		queryManager.OnEntitySignatureChanged(entity, signature, oldSignature);
@@ -674,7 +774,7 @@ public:
 		void* result = componentManager.AddComponentUntyped(entity, componentType, source, size);
 		Signature signature = entityManager.GetSignature(entity);
 		Signature oldSignature = signature;
-		signature.signature.set(componentType, true);
+		signature.require.set(componentType, true);
 		entityManager.SetSignature(entity, signature);
 
 		queryManager.OnEntitySignatureChanged(entity, signature, oldSignature);
@@ -695,7 +795,7 @@ public:
 
 		Signature signature = entityManager.GetSignature(entity);
 		Signature oldSignature = signature;
-		signature.signature.set(componentManager.GetComponentType<T>(), false);
+		signature.require.set(componentManager.GetComponentType<T>(), false);
 		entityManager.SetSignature(entity, signature);
 
 		queryManager.OnEntitySignatureChanged(entity, signature, oldSignature);
@@ -741,6 +841,16 @@ public:
 		return componentManager.GetComponentType<T>();
 	}
 
+	const char* GetComponentTypeName(ComponentType componentType) const
+	{
+		return componentManager.GetComponentTypeName(componentType);
+	}
+
+	std::string BuildSignatureLayerString(Signature::Layer layer) const
+	{
+		return componentManager.BuildSignatureLayerString(layer);
+	}
+
 	template <typename T, typename... Components>
 	std::shared_ptr<T> RegisterSystem(SystemFlags systemFlags = SystemFlags::None)
 	{
@@ -783,9 +893,7 @@ public:
 		auto [query, isNew] = queryManager.GetOrCreateQuery<Components...>(callbacks);
 		if (isNew)
 		{
-			entityManager.GetEntitiesMatchingSignature(query->GetSignature(), query->GetEntities());
-			for (Entity entity : query->GetEntities())
-				query->OnEntityMatch(entity);
+			query->InitializeEntityList(entityManager);
 		}
 		return query;
 	}
@@ -817,7 +925,10 @@ private:
 	std::tuple<Head&, Tail&...> AddComponentsHelper(Entity entity, const Head& head, const Tail&... tail)
 	{
 		if constexpr (sizeof...(tail) > 0)
-			return std::tuple_cat(std::tuple<Head&>(AddComponent(entity, head)), AddComponentsHelper(entity, tail...));
+		{
+			auto first = std::tuple<Head&>(AddComponent(entity, head));
+			return std::tuple_cat(first, AddComponentsHelper(entity, tail...));
+		}
 		else
 			return std::tuple<Head&>(AddComponent(entity, head));
 	}
@@ -847,6 +958,22 @@ private:
 	QueryManager queryManager;
 };
 
+inline void LogSignature(const World& world, const char* label, Signature signature)
+{
+	ecs::Log("{}: Signature {}", label, signature);
+	ecs::Log("    Require: {}", world.BuildSignatureLayerString(signature.require));
+	ecs::Log("    Reject:  {}", world.BuildSignatureLayerString(signature.reject));
+}
+
+inline void LogCompareSignatures(const World& world, const char* label1, Signature signature1, const char* label2, Signature signature2)
+{
+	ecs::Log("Compare 1: {} {} -> 2: {} {}", label1, signature1, label2, signature2);
+	ecs::Log("    Require 1: {}", world.BuildSignatureLayerString(signature1.require));
+	ecs::Log("    Require 2: {}", world.BuildSignatureLayerString(signature2.require));
+	ecs::Log("    Reject  1: {}", world.BuildSignatureLayerString(signature1.reject));
+	ecs::Log("    Reject  2: {}", world.BuildSignatureLayerString(signature2.reject));
+}
+
 template <typename T, typename ... Components>
 auto System<T, Components...>::Register(World& world, SystemFlags systemFlags)
 {
@@ -860,7 +987,7 @@ auto System<T, Components...>::GetArchetype(Entity entity) const
 }
 
 template <typename T, typename ... Components>
-std::vector<Entity>& System<T, Components...>::GetEntities()
+const std::vector<Entity>& System<T, Components...>::GetEntities()
 {
 	return GetSystemQuery()->GetEntities();
 }
@@ -881,40 +1008,45 @@ auto QueryManager::GetOrCreateQuery(QueryCallbacks callbacks) -> std::pair<Query
 	Signature signature = world.BuildSignature<Components...>();
 
 	signatures.emplace(signature);
-	bool isNewQuery = false;
 	if (!queries.contains(signature))
 	{
+		LogSignature(world, "Create Query", signature);
 		queries[signature] = std::make_unique<Query<Components...>>(&world, signature, callbacks);
-		isNewQuery = true;
+		return std::make_pair(static_cast<Query<Components...>*>(queries[signature].get()), true);
 	}
-	return std::make_pair(static_cast<Query<Components...>*>(queries[signature].get()), isNewQuery);
+
+	return std::make_pair(static_cast<Query<Components...>*>(queries[signature].get()), false);
 }
+
 
 // ReSharper disable once CppMemberFunctionMayBeConst
 inline void QueryManager::OnEntitySignatureChanged(Entity entity, Signature newSignature, Signature oldSignature)
 {
-	for (Signature signature : signatures)
+	for (const Signature& signature : signatures)
 	{
 		if (signature.Matches(newSignature) && !signature.Matches(oldSignature))
 		{
 			// Entity did not match query but now does, add it to the query entity list
 			QueryBase* query = queries[signature].get();
-			if (auto predicate = query->SortPredicate())
-				query->GetEntities().insert(
-					std::ranges::upper_bound(query->GetEntities(), entity, predicate), entity);
-			else
-				query->GetEntities().emplace_back(entity);
-			query->OnEntityMatch(entity);
+
+#ifdef _DEBUG
+			auto search = std::ranges::find(query->GetEntities(), entity);
+			ASSERT(search == query->GetEntities().end() && "Entity already exists in query.");
+#endif
+
+			ecs::Log("Query Match Entity {}", entity);
+			LogCompareSignatures(world, "Match Query", signature, "Entity", newSignature);
+
+			query->AddEntity(entity);
 		}
 		else if (!signature.Matches(newSignature) && signature.Matches(oldSignature))
 		{
+			ecs::Log("Query Unmatch Entity {}", entity);
+			LogCompareSignatures(world, "Unmatch Query", signature, "Entity", newSignature);
+
 			// Entity no longer matches query but used to so remove it from the query entity list
 			QueryBase* query = queries[signature].get();
-			if (auto predicate = query->SortPredicate())
-				query->GetEntities().erase(std::ranges::lower_bound(query->GetEntities(), entity, predicate));
-			else
-				std::erase_if(query->GetEntities(), [entity](Entity e) { return e == entity; });
-			query->OnEntityUnmatch(entity);
+			query->RemoveEntity(entity);
 		}
 	}
 }
