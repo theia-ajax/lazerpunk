@@ -44,6 +44,8 @@ struct bitfield
 		return (chunk & mask) == mask;
 	}
 
+	bool empty() const { return lowest() < 0; }
+
 	int lowest() const
 	{
 		for (size_t i = 0; i < CHUNK_COUNT; ++i)
@@ -70,13 +72,21 @@ struct bitfield
 	bitfield<N, T>& operator|=(const bitfield<N, T>& other) { *this = *this | other; return *this; }
 	bitfield<N, T>& operator^=(const bitfield<N, T>& other) { *this = *this ^ other; return *this; }
 
+	constexpr size_t hash() const
+	{
+		size_t res = 17;
+		for (size_t c = 0; c < CHUNK_COUNT; ++c)
+			res *= 31 + std::hash<T>()(chunks[c]);
+		return res;
+	}
+
 	std::array<T, CHUNK_COUNT> chunks{};
 };
 
 template <size_t N, typename T = uint64_t>
 constexpr bool operator==(const bitfield<N, T>& a, const bitfield<N, T>& b)
 {
-	for (size_t i = 0; i < a.chunks.size(); ++i)
+	for (size_t i = 0; i < bitfield<N, T>::CHUNK_COUNT; ++i)
 	{
 		if (a.chunks[i] != b.chunks[i])
 			return false;
@@ -87,7 +97,7 @@ constexpr bool operator==(const bitfield<N, T>& a, const bitfield<N, T>& b)
 template <size_t N, typename T = uint64_t>
 constexpr bool operator!=(const bitfield<N, T>& a, const bitfield<N, T>& b)
 {
-	for (size_t i = 0; i < a.chunks.size(); ++i)
+	for (size_t i = 0; i < bitfield<N, T>::CHUNK_COUNT; ++i)
 	{
 		if (a.chunks[i] != b.chunks[i])
 			return true;
@@ -99,7 +109,7 @@ template <size_t N, typename T = uint64_t>
 constexpr bitfield<N, T> operator&(const bitfield<N, T>& a, const bitfield<N, T>& b)
 {
 	bitfield<N, T> result;
-	for (size_t i = 0; i < a.chunks.size(); ++i)
+	for (size_t i = 0; i < bitfield<N, T>::CHUNK_COUNT; ++i)
 		result.chunks[i] = a.chunks[i] & b.chunks[i];
 	return result;
 }
@@ -108,7 +118,7 @@ template <size_t N, typename T = uint64_t>
 constexpr bitfield<N, T> operator|(const bitfield<N, T>& a, const bitfield<N, T>& b)
 {
 	bitfield<N, T> result;
-	for (size_t i = 0; i < a.chunks.size(); ++i)
+	for (size_t i = 0; i < bitfield<N, T>::CHUNK_COUNT; ++i)
 		result.chunks[i] = a.chunks[i] | b.chunks[i];
 	return result;
 }
@@ -117,7 +127,21 @@ template <size_t N, typename T = uint64_t>
 constexpr bitfield<N, T> operator^(const bitfield<N, T>& a, const bitfield<N, T>& b)
 {
 	bitfield<N, T> result;
-	for (size_t i = 0; i < a.chunks.size(); ++i)
+	for (size_t i = 0; i < bitfield<N, T>::CHUNK_COUNT; ++i)
 		result.chunks[i] = a.chunks[i] ^ b.chunks[i];
 	return result;
+}
+
+template <size_t N, typename T = uint64_t>
+constexpr bool operator<(const bitfield<N, T>& a, const bitfield<N, T>& b)
+{
+	for (size_t i = 0; i < bitfield<N, T>::CHUNK_COUNT; ++i)
+	{
+		auto chunkA = a.chunks[i]; auto chunkB = b.chunks[i];
+		if (chunkA < chunkB)
+			return true;
+		if (chunkB < chunkA)
+			return false;
+	}
+	return false;
 }

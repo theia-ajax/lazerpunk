@@ -67,7 +67,7 @@ int main(int argc, char* argv[])
 		CameraView, GameCameraControl,
 		SpriteRender, GameMapRender,
 		EnemyTag,
-		Spawner,
+		Spawner, SpawnSource,
 		PhysicsBody, Collider::Box, Collider::Circle, PhysicsNudge,
 		DebugMarker>();
 
@@ -81,11 +81,13 @@ int main(int argc, char* argv[])
 	auto gameMapRenderSystem = GameMapRenderSystem::Register(world);
 	auto cameraControlSystem = GameCameraControlSystem::Register(world);
 	auto enemyFollowSystem = EnemyFollowTargetSystem::Register(world);
-	auto nudgeSystem = PhysicsNudgeSystem::Register(world, SystemFlags::Monitor);
+	auto nudgeSystem = PhysicsNudgeSystem::Register(world);
 	auto physicsSystem = PhysicsSystem::Register(world);
 	auto debugMarkerSystem = ColliderDebugDrawSystem::Register(world);
 	auto physicsBodyVelocitySystem = PhysicsBodyVelocitySystem::Register(world);
-	auto spawnerSystem = SpawnerSystem::Register(world, SystemFlags::MonitorGlobalEntityDestroy);
+	auto spawnerSystem = SpawnerSystem::Register(world);
+
+	auto query = world.CreateQuery<Transform, EnemyTag>();
 
 	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
 
@@ -277,9 +279,7 @@ int main(int argc, char* argv[])
 		*frameTickMeasures.next() = frameTicks;
 		if (frameTickMeasures.index() == 0)
 		{
-			uint64_t sum = 0;
-			std::ranges::for_each(frameTickMeasures, [&sum](auto v) { sum += v; });
-			averageFrameTick = sum / frameTickMeasures.ssize();
+			averageFrameTick = types::average(frameTickMeasures);
 		}
 
 		debug::Watch("FPS: {:d}, Frame: {:.3f}ms", fps, stm_ms(averageFrameTick));

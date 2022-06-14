@@ -188,6 +188,18 @@ namespace spawner
 
 void SpawnerSystem::Update(const GameTime& time) const
 {
+	auto sourceQuery = GetWorld().CreateQuery<SpawnSource>({}, [this](Entity e)
+	{
+		auto [source] = GetWorld().GetComponent<SpawnSource>(e);
+		for (Entity entity : entities)
+		{
+			if (entity == source)
+			{
+				GetWorld().GetComponent<Spawner>(entity).spawnedEnemies--;
+			}
+		}
+	});
+
 	for (Entity entity : entities)
 	{
 		auto [transform, spawner] = GetArchetype(entity);
@@ -199,12 +211,13 @@ void SpawnerSystem::Update(const GameTime& time) const
 		{
 			if (spawner.maxAlive)
 			{
-				if (!spawner.spawnedEnemies.full() && spawner.spawnedEnemies.size() < spawner.maxAlive)
+				if (spawner.spawnedEnemies < spawner.maxAlive)
 				{
 					spawner.spawnTimer += spawner.interval;
 					if (Entity spawned = spawner::Spawn(GetWorld(), spawner, transform.position, transform.rotation))
 					{
-						spawner.spawnedEnemies.push(spawned);
+						GetWorld().AddComponent(spawned, SpawnSource{ entity });
+						spawner.spawnedEnemies++;
 					}
 				}
 			}
@@ -214,21 +227,23 @@ void SpawnerSystem::Update(const GameTime& time) const
 				spawner::Spawn(GetWorld(), spawner, transform.position, transform.rotation);
 			}
 		}
-		if (input::GetKeyDown(SDL_SCANCODE_K))
+
+		
+		/*if (input::GetKeyDown(SDL_SCANCODE_K))
 			if (!spawner.spawnedEnemies.empty())
-				GetWorld().AddComponent(spawner.spawnedEnemies[0], Expiration{ 0 });
+				GetWorld().AddComponent(spawner.spawnedEnemies[0], Expiration{ 0 });*/
 	}
 }
 
 void SpawnerSystem::OnEntityDestroyed(Entity destroyedEntity)
 {
-	for (Entity entity : entities)
-	{
-		if (auto [transform, spawner] = GetArchetype(entity); spawner.maxAlive > 0)
-		{
-			auto search = std::ranges::find_if(spawner.spawnedEnemies, [destroyedEntity](auto e) { return e == destroyedEntity; });
-			if (search != spawner.spawnedEnemies.end())
-				spawner.spawnedEnemies.remove_element(&(*search));
-		}
-	}
+	//for (Entity entity : entities)
+	//{
+	//	if (auto [transform, spawner] = GetArchetype(entity); spawner.maxAlive > 0)
+	//	{
+	//		types::erase_if(spawner.spawnedEnemies, [destroyedEntity](Entity e) { return e == destroyedEntity; });
+	//	}
+	//}
 }
+
+

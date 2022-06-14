@@ -88,7 +88,12 @@ struct Spawner
 	float interval{};
 	float spawnTimer{};
 	int32_t maxAlive{};
-	static_stack<Entity, 59> spawnedEnemies{}; // 59 makes the total size of the struct 256 bytes
+	int32_t spawnedEnemies{};
+};
+
+struct SpawnSource
+{
+	Entity source;
 };
 
 // Physics/Collision

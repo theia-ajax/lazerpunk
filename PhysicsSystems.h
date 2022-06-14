@@ -7,7 +7,7 @@
 
 struct GameMap;
 
-struct PhysicsSystem : System<PhysicsSystem, Transform, PhysicsBody>
+struct PhysicsSystem final : System<PhysicsSystem, Transform, PhysicsBody>
 {
 	void SetMap(GameMapHandle mapHandle);
 	void Update(const GameTime& time) const;
@@ -20,17 +20,12 @@ private:
 	std::optional<std::reference_wrapper<GameMapTileLayer>> activeSolidLayer;
 };
 
-struct PhysicsBodyVelocitySystem : System<PhysicsBodyVelocitySystem, Velocity, PhysicsBody>
+struct PhysicsBodyVelocitySystem final : System<PhysicsBodyVelocitySystem, Velocity, PhysicsBody>
 {
 	void Update(const GameTime& time) const;
 };
 
-struct PhysicsNudgeSystem : System<PhysicsNudgeSystem, Transform, PhysicsNudge, PhysicsBody>
+struct PhysicsNudgeSystem final : System<PhysicsNudgeSystem, Transform, PhysicsNudge, PhysicsBody>
 {
-	void Update(const GameTime& time) const;
-	void OnEntityAdded(Entity entity) override;
-	void OnEntityRemoved(Entity entity) override;
-
-private:
-	std::vector<Entity> entityVector;
+	void Update(const GameTime& time);
 };

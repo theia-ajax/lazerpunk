@@ -1,10 +1,11 @@
 #pragma once
 
-#include <cstring>
-#include <cstdint>
 #include <algorithm>
-#include <cmath>
 #include <cassert>
+#include <cmath>
+#include <cstdint>
+#include <numeric>
+
 #include "enumflag.h"
 #include "stringid.h"
 
@@ -181,6 +182,23 @@ private:
 	int m_head{};
 };
 
+namespace types
+{
+	template <typename T, int N, typename Func>
+	int erase_if(static_stack<T, N>& stack, Func&& predicate)
+	{
+		int start = stack.size();
+		for (int i = 0; i < stack.size(); ++i)
+		{
+			if (predicate(stack[i]))
+			{
+				stack.remove_at_ordered(i);
+			}
+		}
+		return start - stack.size();
+	}
+}
+
 template <typename T, int N>
 struct ring_buf
 {
@@ -244,6 +262,15 @@ private:
 	ArrayType m_mem{};
 	int m_index = 0;
 };
+
+namespace types
+{
+	template <typename T, int N>
+	T average(ring_buf<T, N>& rbuf)
+	{
+		return std::accumulate(rbuf.begin(), rbuf.end(), static_cast<T>(0)) / static_cast<T>(N);
+	}
+}
 
 struct Vec2
 {

@@ -1,7 +1,10 @@
 ﻿#include "PhysicsSystems.h"
 
 #include <algorithm>
+#include <sokol_time.h>
+
 #include "components.h"
+#include "debug.h"
 
 void PhysicsSystem::SetMap(GameMapHandle handle)
 {
@@ -111,9 +114,11 @@ void PhysicsBodyVelocitySystem::Update(const GameTime& time) const
 	}
 }
 
-void PhysicsNudgeSystem::Update(const GameTime& time) const
+void PhysicsNudgeSystem::Update(const GameTime& time)
 {
-	for (Entity entity : entities)
+	std::vector<Entity>& entityVector = GetSystemQuery()->GetEntities();
+
+	for (Entity entity : entityVector)
 	{
 		GetWorld().GetComponent<PhysicsNudge>(entity).velocity = vec2::Zero;
 	}
@@ -145,22 +150,9 @@ void PhysicsNudgeSystem::Update(const GameTime& time) const
 		}
 	}
 
-	for (Entity entity : entities)
+	for (Entity entity : entityVector)
 	{
 		auto [nudge, body] = GetWorld().GetComponents<PhysicsNudge, PhysicsBody>(entity);
 		body.velocity = body.velocity + nudge.velocity * time.dt();
 	}
-
 }
-
-void PhysicsNudgeSystem::OnEntityAdded(Entity entity)
-{
-	entityVector.emplace_back(entity);
-}
-
-void PhysicsNudgeSystem::OnEntityRemoved(Entity entity)
-{
-	auto [first, last] = std::ranges::remove_if(entityVector, [entity](auto e) { return e == entity; });
-	entityVector.erase(first, last);
-}
-
