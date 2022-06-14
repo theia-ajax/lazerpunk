@@ -1,11 +1,11 @@
 ﻿#include "CoreSystems.h"
 
 
-void EntityExpirationSystem::Update(const GameTime& time) const
+void EntityExpirationSystem::Update(const GameTime& time)
 {
 	std::queue<Entity> removeQueue{};
 
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto& [secRemaining] = GetWorld().GetComponent<Expiration>(entity);
 
@@ -26,7 +26,7 @@ void ViewSystem::Update(const GameTime& time)
 {
 	activeCameraEntity = 0;
 
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		if (!activeCameraEntity)
 			activeCameraEntity = entity;

@@ -16,9 +16,9 @@ void PhysicsSystem::SetMap(GameMapHandle handle)
 	}
 }
 
-void PhysicsSystem::Update(const GameTime& time) const
+void PhysicsSystem::Update(const GameTime& time)
 {
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto [transform, body] = GetArchetype(entity);
 
@@ -105,9 +105,9 @@ bool PhysicsSystem::MapSolid(const Bounds2D& bounds, const Vec2& velocity) const
 		[this, velocity](auto&& p) { return MapSolid(p + velocity); });
 }
 
-void PhysicsBodyVelocitySystem::Update(const GameTime& time) const
+void PhysicsBodyVelocitySystem::Update(const GameTime& time)
 {
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto [velocity, body] = GetArchetype(entity);
 		body.velocity = velocity.velocity * time.dt();
@@ -116,7 +116,7 @@ void PhysicsBodyVelocitySystem::Update(const GameTime& time) const
 
 void PhysicsNudgeSystem::Update(const GameTime& time)
 {
-	std::vector<Entity>& entityVector = GetSystemQuery()->GetEntities();
+	std::vector<Entity>& entityVector = GetEntities();
 
 	for (Entity entity : entityVector)
 	{

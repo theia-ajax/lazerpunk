@@ -6,12 +6,12 @@
 
 struct ColliderDebugDrawSystem : System<ColliderDebugDrawSystem, Transform, Collider::Box>
 {
-	void DrawMarkers(const DrawContext& ctx) const;
+	void DrawMarkers(const DrawContext& ctx);
 };
 
 struct GameMapRenderSystem : System<GameMapRenderSystem, Transform, GameMapRender>
 {
-	void RenderLayers(const DrawContext& ctx, const StrId* layers, size_t count) const;
+	void RenderLayers(const DrawContext& ctx, const StrId* layers, size_t count);
 
 	template <int N>
 	void RenderLayers(const DrawContext& ctx, const std::array<StrId, N>& layers)
@@ -22,10 +22,10 @@ struct GameMapRenderSystem : System<GameMapRenderSystem, Transform, GameMapRende
 
 struct SpriteFacingSystem : System<SpriteFacingSystem, Facing, FacingSprites, SpriteRender>
 {
-	void Update() const;
+	void Update();
 };
 
 struct SpriteRenderSystem : System<SpriteRenderSystem, Transform, SpriteRender>
 {
-	void Render(const DrawContext& ctx) const;
+	void Render(const DrawContext& ctx);
 };

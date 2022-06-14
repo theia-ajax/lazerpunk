@@ -6,7 +6,7 @@
 
 struct EntityExpirationSystem : System<EntityExpirationSystem, Expiration>
 {
-	void Update(const GameTime& time) const;
+	void Update(const GameTime& time);
 };
 
 struct ViewSystem : System<ViewSystem, Transform, CameraView>

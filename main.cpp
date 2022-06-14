@@ -154,12 +154,15 @@ int main(int argc, char* argv[])
 		return Vec2{ rng.RangeF(bounds.Left(), bounds.Right()), rng.RangeF(bounds.Top(), bounds.Bottom()) };
 	};
 
-	constexpr int SPAWNER_COUNT = 5;
+	constexpr int SPAWNER_COUNT = 1;
 	for (auto spawnerEntities = world.CreateEntities<SPAWNER_COUNT>(); Entity spawner : spawnerEntities)
 	{
 		if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
 		{
-			world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, rng.RangeF(5.0f, 10.0f), rng.RangeF(1, 10), 6 });
+			//world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, rng.RangeF(5.0f, 10.0f), rng.RangeF(1, 10), 6 });
+			world.AddComponents(spawner,
+				Transform{position},
+				Spawner{ enemyPrefab, 0.5f, 0.5f, 6 });
 		}
 	}
 

@@ -7,29 +7,28 @@
 struct EnemyFollowTargetSystem : System<EnemyFollowTargetSystem, Transform, Velocity, EnemyTag>
 {
 	Entity targetEntity{};
-	void Update(const GameTime& time) const;
+	void Update(const GameTime& time);
 };
 
 struct GameCameraControlSystem : System<GameCameraControlSystem, Transform, CameraView, GameCameraControl>
 {
 	void SnapFocusToFollow(Entity cameraEntity) const;
-	void Update(const GameTime& time) const;
+	void Update(const GameTime& time);
 };
 
 struct PlayerControlSystem : System<PlayerControlSystem, GameInput, Transform, Facing, Velocity, PlayerControl>
 {
-	void Update(const GameTime& time) const;
+	void Update(const GameTime& time);
 };
 
 struct PlayerShootControlSystem : System<PlayerShootControlSystem, GameInput, Transform, Facing, Velocity, PlayerShootControl>
 {
-	void Update(const GameTime& time) const;
+	void Update(const GameTime& time);
 };
 
 
 struct SpawnerSystem : System<SpawnerSystem, Transform, Spawner>
 {
-	void Update(const GameTime& time) const;
-	void OnEntityDestroyed(Entity destroyedEntity) override;
+	void Update(const GameTime& time);
 };
 

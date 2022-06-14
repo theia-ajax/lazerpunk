@@ -12,9 +12,9 @@ namespace
 	}
 }
 
-void GatherInputSystem::Update(const GameTime& time) const
+void GatherInputSystem::Update(const GameTime& time)
 {
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto [gather, gameInput] = GetArchetype(entity);
 

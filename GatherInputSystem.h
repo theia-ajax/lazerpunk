@@ -6,5 +6,5 @@
 
 struct GatherInputSystem : System<GatherInputSystem, GameInputGather, GameInput>
 {
-	void Update(const GameTime& time) const;
+	void Update(const GameTime& time);
 };

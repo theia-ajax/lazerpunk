@@ -391,6 +391,16 @@ private:
 
 class QueryManager;
 
+struct QueryCallbacks
+{
+	std::function<void(Entity)> onEntityMatch{};
+	std::function<void(Entity)> onEntityUnmatch{};
+	std::function<bool(Entity, Entity)> querySortPred{};
+
+	void OnEntityMatch(Entity entity) const { if (onEntityMatch) onEntityMatch(entity); }
+	void OnEntityUnmatch(Entity entity) const { if (onEntityUnmatch) onEntityUnmatch(entity); }
+};
+
 class QueryBase  // NOLINT(cppcoreguidelines-special-member-functions)
 {
 public:
@@ -400,21 +410,22 @@ public:
 	QueryBase operator=(const QueryBase& other) = delete;
 	QueryBase operator=(QueryBase&& other) = delete;
 
-	explicit QueryBase(World* world, Signature signature, std::function<void(Entity)> onEntityMatch = {}, std::function<void(Entity)> onEntityUnmatch = {})
-		: signature(signature), onEntityMatchQuery(std::move(onEntityMatch)), onEntityUnmatchQuery(std::move(onEntityUnmatch)), world(world) {}
+	explicit QueryBase(World* world, Signature signature, QueryCallbacks callbacks)
+		: signature(signature)
+		, callbacks(std::move(callbacks))
+		, world(world) {}
 
 	World& GetWorld() const { return *world; }
 	std::vector<Entity>& GetEntities() { return entities; }
 	Signature GetSignature() const { return signature; }
-	void OnEntityMatch(Entity entity) const { if (onEntityMatchQuery) onEntityMatchQuery(entity); }
-	void OnEntityUnmatch(Entity entity) const { if (onEntityUnmatchQuery) onEntityUnmatchQuery(entity); }
-	void SetOnEntityMatch(std::function<void(Entity)> action) { onEntityMatchQuery = std::move(action); }
-	void SetOnEntityUnmatch(std::function<void(Entity)> action) { onEntityUnmatchQuery = std::move(action); }
+	void OnEntityMatch(Entity entity) const { callbacks.OnEntityMatch(entity); }
+	void OnEntityUnmatch(Entity entity) const { callbacks.OnEntityUnmatch(entity); }
+	std::function<bool(Entity, Entity)> SortPredicate() const { return callbacks.querySortPred; }
+
 protected:
 	std::vector<Entity> entities;
 	Signature signature;
-	std::function<void(Entity)> onEntityMatchQuery = {};
-	std::function<void(Entity)> onEntityUnmatchQuery = {};
+	QueryCallbacks callbacks;
 
 private:
 	World* world;
@@ -430,8 +441,8 @@ public:
 	Query operator=(const Query& other) = delete;
 	Query operator=(Query&& other) = delete;
 
-	explicit Query(World* world, Signature signature, std::function<void(Entity)> onEntityMatch = {}, std::function<void(Entity)> onEntityUnmatch = {})
-		: QueryBase(world, signature, onEntityMatch, onEntityUnmatch) { }
+	explicit Query(World* world, Signature signature, QueryCallbacks callbacks)
+		: QueryBase(world, signature, callbacks) { }
 
 	auto GetArchetype(Entity entity) const
 	{
@@ -444,8 +455,8 @@ class QueryManager
 public:
 	explicit QueryManager(World& world) : world(world) {}
 
-	template <class ... Components>
-	auto GetOrCreateQuery(std::function<void(Entity)> onMatch = {}, std::function<void(Entity)> onUnmatch = {}) -> std::pair<Query<Components...>*, bool>;
+	template <class... Components>
+	auto GetOrCreateQuery(QueryCallbacks callbacks = {}) -> std::pair<Query<Components...>*, bool>;
 	void OnEntitySignatureChanged(Entity entity, Signature newSignature, Signature oldSignature);
 private:
 	World& world;
@@ -466,13 +477,11 @@ struct SystemBase  // NOLINT(cppcoreguidelines-special-member-functions)
 	virtual ~SystemBase();
 
 	World& GetWorld() const;
-	std::set<Entity> entities{};
 
 	friend class SystemManager;
 
 	virtual void OnEntityAdded(Entity entity);
 	virtual void OnEntityRemoved(Entity entity);
-	virtual void OnEntityDestroyed(Entity entity);
 
 	SystemFlags Flags() const;
 
@@ -486,8 +495,6 @@ inline World& SystemBase::GetWorld() const { return *world; }
 inline SystemFlags SystemBase::Flags() const { return flags; }
 inline void SystemBase::OnEntityAdded(Entity entity) {}
 inline void SystemBase::OnEntityRemoved(Entity entity) {}
-inline void SystemBase::OnEntityDestroyed(Entity destroyedEntity) {}
-
 
 template <typename T, typename... Components>
 struct System : SystemBase
@@ -495,6 +502,7 @@ struct System : SystemBase
 	auto GetSystemQuery();
 	static auto Register(World& world, SystemFlags systemFlags = SystemFlags::None);
 	auto GetArchetype(Entity entity) const;
+	std::vector<Entity>& GetEntities();
 };
 
 class World;
@@ -568,48 +576,6 @@ public:
 		return signatures[systemId];
 	}
 
-	void OnEntityDestroyed(Entity entity)
-	{
-		for (const auto& system : systems | std::views::values)
-		{
-			if (flags::Test(system->Flags(), SystemFlags::MonitorGlobalEntityDestroy))
-				system->OnEntityDestroyed(entity);
-			RemoveEntityFromSystem(entity, system);
-		}
-	}
-
-	void OnEntitySignatureChanged(Entity entity, Signature entitySignature)
-	{
-		for (const auto& [systemId, system] : systems)
-		{
-			if (const auto& systemSignature = signatures[systemId]; systemSignature.Matches(entitySignature))
-			{
-				AddEntityToSystem(entity, system);
-			}
-			else
-			{
-				RemoveEntityFromSystem(entity, system);
-			}
-		}
-	}
-
-private:
-	static void AddEntityToSystem(Entity entity, const std::shared_ptr<SystemBase>& system)
-	{
-		if (flags::Test(system->Flags(), SystemFlags::Monitor) && !system->entities.contains(entity))
-			system->OnEntityAdded(entity);
-
-		system->entities.insert(entity);
-	}
-
-	static void RemoveEntityFromSystem(Entity entity, const std::shared_ptr<SystemBase>& system)
-	{
-		if (flags::Test(system->Flags(), SystemFlags::Monitor) && system->entities.contains(entity))
-			system->OnEntityRemoved(entity);
-
-		system->entities.erase(entity);
-	}
-
 private:
 	std::unordered_map<SystemId, Signature> signatures{};
 	std::unordered_map<SystemId, std::shared_ptr<SystemBase>> systems{};
@@ -674,7 +640,6 @@ public:
 		queryManager.OnEntitySignatureChanged(entity, Signature{}, entityManager.GetSignature(entity));
 		entityManager.DestroyEntity(entity);
 		componentManager.OnEntityDestroyed(entity);
-		systemManager.OnEntityDestroyed(entity);
 	}
 
 	template <typename T>
@@ -699,7 +664,6 @@ public:
 		signature.signature.set(componentManager.GetComponentType<T>(), true);
 		entityManager.SetSignature(entity, signature);
 
-		systemManager.OnEntitySignatureChanged(entity, signature);
 		queryManager.OnEntitySignatureChanged(entity, signature, oldSignature);
 
 		return result;
@@ -713,7 +677,6 @@ public:
 		signature.signature.set(componentType, true);
 		entityManager.SetSignature(entity, signature);
 
-		systemManager.OnEntitySignatureChanged(entity, signature);
 		queryManager.OnEntitySignatureChanged(entity, signature, oldSignature);
 
 		return result;
@@ -735,7 +698,6 @@ public:
 		signature.signature.set(componentManager.GetComponentType<T>(), false);
 		entityManager.SetSignature(entity, signature);
 
-		systemManager.OnEntitySignatureChanged(entity, signature);
 		queryManager.OnEntitySignatureChanged(entity, signature, oldSignature);
 	}
 
@@ -816,13 +778,14 @@ public:
 	}
 
 	template <typename... Components>
-	Query<Components...>* CreateQuery(std::function<void(Entity)> onMatch = {},
-	                                  std::function<void(Entity)> onUnmatch = {})
+	Query<Components...>* CreateQuery(QueryCallbacks callbacks = {})
 	{
-		auto [query, isNew] = queryManager.GetOrCreateQuery<Components...>(onMatch, onUnmatch);
+		auto [query, isNew] = queryManager.GetOrCreateQuery<Components...>(callbacks);
 		if (isNew)
 		{
 			entityManager.GetEntitiesMatchingSignature(query->GetSignature(), query->GetEntities());
+			for (Entity entity : query->GetEntities())
+				query->OnEntityMatch(entity);
 		}
 		return query;
 	}
@@ -884,7 +847,6 @@ private:
 	QueryManager queryManager;
 };
 
-
 template <typename T, typename ... Components>
 auto System<T, Components...>::Register(World& world, SystemFlags systemFlags)
 {
@@ -897,18 +859,24 @@ auto System<T, Components...>::GetArchetype(Entity entity) const
 	return GetWorld().template GetComponents<Components...>(entity);
 }
 
-
+template <typename T, typename ... Components>
+std::vector<Entity>& System<T, Components...>::GetEntities()
+{
+	return GetSystemQuery()->GetEntities();
+}
 
 template <typename T, typename ... Components>
 auto System<T, Components...>::GetSystemQuery()
 {
 	return GetWorld().template CreateQuery<Reject<Prefab>, Components...>(
-		[this](Entity e) { static_cast<T*>(this)->OnEntityAdded(e); },
-		[this](Entity e) { static_cast<T*>(this)->OnEntityRemoved(e); });
+		QueryCallbacks {
+			[this](Entity e) { static_cast<T*>(this)->OnEntityAdded(e); },
+			[this](Entity e) { static_cast<T*>(this)->OnEntityRemoved(e); }
+		});
 }
 
 template <typename ... Components>
-auto QueryManager::GetOrCreateQuery(std::function<void(Entity)> onMatch, std::function<void(Entity)> onUnmatch) -> std::pair<Query<Components...>*, bool>
+auto QueryManager::GetOrCreateQuery(QueryCallbacks callbacks) -> std::pair<Query<Components...>*, bool>
 {
 	Signature signature = world.BuildSignature<Components...>();
 
@@ -916,7 +884,7 @@ auto QueryManager::GetOrCreateQuery(std::function<void(Entity)> onMatch, std::fu
 	bool isNewQuery = false;
 	if (!queries.contains(signature))
 	{
-		queries[signature] = std::make_unique<Query<Components...>>(&world, signature, onMatch, onUnmatch);
+		queries[signature] = std::make_unique<Query<Components...>>(&world, signature, callbacks);
 		isNewQuery = true;
 	}
 	return std::make_pair(static_cast<Query<Components...>*>(queries[signature].get()), isNewQuery);
@@ -931,14 +899,21 @@ inline void QueryManager::OnEntitySignatureChanged(Entity entity, Signature newS
 		{
 			// Entity did not match query but now does, add it to the query entity list
 			QueryBase* query = queries[signature].get();
-			query->GetEntities().emplace_back(entity);
+			if (auto predicate = query->SortPredicate())
+				query->GetEntities().insert(
+					std::ranges::upper_bound(query->GetEntities(), entity, predicate), entity);
+			else
+				query->GetEntities().emplace_back(entity);
 			query->OnEntityMatch(entity);
 		}
 		else if (!signature.Matches(newSignature) && signature.Matches(oldSignature))
 		{
 			// Entity no longer matches query but used to so remove it from the query entity list
 			QueryBase* query = queries[signature].get();
-			std::erase_if(query->GetEntities(), [entity](Entity e) { return e == entity; });
+			if (auto predicate = query->SortPredicate())
+				query->GetEntities().erase(std::ranges::lower_bound(query->GetEntities(), entity, predicate));
+			else
+				std::erase_if(query->GetEntities(), [entity](Entity e) { return e == entity; });
 			query->OnEntityUnmatch(entity);
 		}
 	}

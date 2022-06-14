@@ -1,13 +1,13 @@
 #include "ControllerSystems.h"
 
-void EnemyFollowTargetSystem::Update(const GameTime& time) const
+void EnemyFollowTargetSystem::Update(const GameTime& time)
 {
 	if (!targetEntity)
 		return;
 
 	const auto& targetTransform = GetWorld().GetComponent<Transform>(targetEntity);
 
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto [transform, velocity, _] = GetArchetype(entity);
 
@@ -33,9 +33,9 @@ void GameCameraControlSystem::SnapFocusToFollow(Entity cameraEntity) const
 	view.center = position;
 }
 
-void GameCameraControlSystem::Update(const GameTime& time) const
+void GameCameraControlSystem::Update(const GameTime& time)
 {
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto [transform, view, camera] = GetArchetype(entity);
 
@@ -67,12 +67,12 @@ void GameCameraControlSystem::Update(const GameTime& time) const
 }
 
 
-void PlayerControlSystem::Update(const GameTime& time) const
+void PlayerControlSystem::Update(const GameTime& time)
 {
 	using namespace math;
 	using namespace vec2;
 
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto [input, transform, facing, velocity, control] = GetArchetype(entity);
 
@@ -125,9 +125,9 @@ void PlayerControlSystem::Update(const GameTime& time) const
 	}
 }
 
-void PlayerShootControlSystem::Update(const GameTime& time) const
+void PlayerShootControlSystem::Update(const GameTime& time)
 {
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto [input, transform, facing, velocity, shootControl] = GetArchetype(entity);
 
@@ -186,21 +186,22 @@ namespace spawner
 	}
 }
 
-void SpawnerSystem::Update(const GameTime& time) const
+void SpawnerSystem::Update(const GameTime& time)
 {
-	auto sourceQuery = GetWorld().CreateQuery<SpawnSource>({}, [this](Entity e)
-	{
-		auto [source] = GetWorld().GetComponent<SpawnSource>(e);
-		for (Entity entity : entities)
-		{
-			if (entity == source)
+	auto sourceQuery = GetWorld().CreateQuery<SpawnSource>(
+		QueryCallbacks{
+			.onEntityMatch = {},
+			.onEntityUnmatch = [this](Entity e)
 			{
-				GetWorld().GetComponent<Spawner>(entity).spawnedEnemies--;
-			}
-		}
-	});
+				auto [source] = GetWorld().GetComponent<SpawnSource>(e);
+				for (Entity entity : GetEntities())
+				{
+					if (entity == source)
+						GetWorld().GetComponent<Spawner>(entity).spawnedEnemies--;
+				}}
+			});
 
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto [transform, spawner] = GetArchetype(entity);
 
@@ -228,22 +229,16 @@ void SpawnerSystem::Update(const GameTime& time) const
 			}
 		}
 
-		
-		/*if (input::GetKeyDown(SDL_SCANCODE_K))
-			if (!spawner.spawnedEnemies.empty())
-				GetWorld().AddComponent(spawner.spawnedEnemies[0], Expiration{ 0 });*/
+		if (input::GetKeyDown(SDL_SCANCODE_K))
+		{
+			for (Entity spawned : sourceQuery->GetEntities())
+			{
+				if (auto [source] = GetWorld().GetComponent<SpawnSource>(spawned); source == entity)
+				{
+					GetWorld().DestroyEntity(spawned);
+					break;
+				}
+			}
+		}
 	}
 }
-
-void SpawnerSystem::OnEntityDestroyed(Entity destroyedEntity)
-{
-	//for (Entity entity : entities)
-	//{
-	//	if (auto [transform, spawner] = GetArchetype(entity); spawner.maxAlive > 0)
-	//	{
-	//		types::erase_if(spawner.spawnedEnemies, [destroyedEntity](Entity e) { return e == destroyedEntity; });
-	//	}
-	//}
-}
-
-

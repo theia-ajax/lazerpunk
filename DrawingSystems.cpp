@@ -3,11 +3,11 @@
 #include "draw.h"
 #include "CoreSystems.h"
 
-void ColliderDebugDrawSystem::DrawMarkers(const DrawContext& ctx) const
+void ColliderDebugDrawSystem::DrawMarkers(const DrawContext& ctx)
 {
 	const auto& viewSystem = GetWorld().GetSystem<ViewSystem>();
 
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto [transform, box] = GetArchetype(entity);
 
@@ -20,10 +20,10 @@ void ColliderDebugDrawSystem::DrawMarkers(const DrawContext& ctx) const
 	}
 }
 
-void GameMapRenderSystem::RenderLayers(const DrawContext& ctx, const StrId* layers, size_t count) const
+void GameMapRenderSystem::RenderLayers(const DrawContext& ctx, const StrId* layers, size_t count)
 {
 	const auto& viewSystem = GetWorld().GetSystem<ViewSystem>();
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto [transform, mapRender] = GetArchetype(entity);
 		if (mapRender.mapHandle)
@@ -34,9 +34,9 @@ void GameMapRenderSystem::RenderLayers(const DrawContext& ctx, const StrId* laye
 	}
 }
 
-void SpriteFacingSystem::Update() const
+void SpriteFacingSystem::Update()
 {
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		switch (auto [facing, facingSprites, sprite] = GetArchetype(entity); facing.facing)
 		{
@@ -60,11 +60,11 @@ void SpriteFacingSystem::Update() const
 	}
 }
 
-void SpriteRenderSystem::Render(const DrawContext& ctx) const
+void SpriteRenderSystem::Render(const DrawContext& ctx)
 {
 	const auto& viewSystem = GetWorld().GetSystem<ViewSystem>();
 
-	for (Entity entity : entities)
+	for (Entity entity : GetEntities())
 	{
 		auto [transform, sprite] = GetArchetype(entity);
 		Vec2 screenPos = viewSystem->WorldToScreen(transform.position);
