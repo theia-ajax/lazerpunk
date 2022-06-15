@@ -1,5 +1,8 @@
 #include "ControllerSystems.h"
 
+#include "input.h"
+
+
 void EnemyFollowTargetSystem::Update(const GameTime& time)
 {
 	if (!targetEntity)
@@ -166,7 +169,22 @@ void PlayerShootControlSystem::Update(const GameTime& time)
 		}
 	}
 }
-#include "input.h"
+
+void SpawnerSystem::OnRegistered()
+{
+	spawnSourceQuery = GetWorld().CreateQuery<Reject<Prefab>, SpawnSource>(
+		QueryCallbacks{
+			.onEntityMatch = {},
+			.onEntityUnmatch = [this](Entity e)
+			{
+				auto [source] = GetWorld().GetComponent<SpawnSource>(e);
+				for (Entity entity : GetEntities())
+				{
+					if (entity == source)
+						GetWorld().GetComponent<Spawner>(entity).spawnedEnemies--;
+				}}
+		});
+}
 
 namespace spawner
 {
@@ -188,8 +206,6 @@ namespace spawner
 
 void SpawnerSystem::Update(const GameTime& time)
 {
-	
-
 	for (Entity entity : GetEntities())
 	{
 		auto [transform, spawner] = GetArchetype(entity);
@@ -220,19 +236,7 @@ void SpawnerSystem::Update(const GameTime& time)
 
 		if (input::GetKeyDown(SDL_SCANCODE_K))
 		{
-			auto sourceQuery = GetWorld().CreateQuery<SpawnSource, Reject<Prefab>>(
-				QueryCallbacks{
-					.onEntityMatch = {},
-					.onEntityUnmatch = [this](Entity e)
-					{
-						auto [source] = GetWorld().GetComponent<SpawnSource>(e);
-						for (Entity entity : GetEntities())
-						{
-							if (entity == source)
-								GetWorld().GetComponent<Spawner>(entity).spawnedEnemies--;
-						}}
-				});
-			for (Entity spawned : sourceQuery->GetEntities())
+			for (Entity spawned : spawnSourceQuery->GetEntities())
 			{
 				if (auto [source] = GetWorld().GetComponent<SpawnSource>(spawned); source == entity)
 				{

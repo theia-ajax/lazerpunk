@@ -29,6 +29,8 @@ struct PlayerShootControlSystem : System<PlayerShootControlSystem, GameInput, Tr
 
 struct SpawnerSystem : System<SpawnerSystem, Transform, Spawner>
 {
+	void OnRegistered() override;
 	void Update(const GameTime& time);
+	Query<Reject<Prefab>, SpawnSource>* spawnSourceQuery{};
 };
 

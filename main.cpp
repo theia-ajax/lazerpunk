@@ -87,8 +87,6 @@ int main(int argc, char* argv[])
 	auto physicsBodyVelocitySystem = PhysicsBodyVelocitySystem::Register(world);
 	auto spawnerSystem = SpawnerSystem::Register(world);
 
-	auto query = world.CreateQuery<Transform, EnemyTag>();
-
 	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
 
 	physicsSystem->SetMap(map);
