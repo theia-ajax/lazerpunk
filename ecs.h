@@ -147,6 +147,7 @@ public:
 
 	void DestroyEntity(Entity entity)
 	{
+		ecs::Log("[EntityManager] DestroyEntity {}", entity);
 		ASSERT(entity < kMaxEntities && "Invalid entity.");
 
 		signatures[entity].reset();
@@ -239,6 +240,9 @@ public:
 
 	void Remove(Entity entity)
 	{
+		ecs::Log("ComponentArray<{}> Remove {}", typeid(T).name() + 7, entity);
+
+
 		ASSERT(entityToIndexMap.contains(entity) && "Component missing for entity.");
 
 		// swap last element into removed index
@@ -386,6 +390,7 @@ public:
 
 	void OnEntityDestroyed(Entity entity)
 	{
+		ecs::Log("[ComponentManager] OnEntityDestroyed {}", entity);
 		for (const auto& component : componentArrays | std::views::values)
 		{
 			component->OnEntityDestroyed(entity);
@@ -510,14 +515,28 @@ public:
 
 	void AddEntity(Entity entity)
 	{
-		entities.insert(std::ranges::upper_bound(entities, entity, [this](Entity a, Entity b) { return sortPredicate(*world, a, b); }), entity);
+		entities.insert(std::ranges::upper_bound(entities, entity, SortCaller(sortPredicate, *world)), entity);
 		OnEntityMatch(entity);
 	}
 
 	void RemoveEntity(Entity entity)
 	{
-		entities.erase(std::ranges::lower_bound(entities, entity, [this](Entity a, Entity b) { return sortPredicate(*world, a, b); }));
+		entities.erase(std::ranges::lower_bound(entities, entity, SortCaller(sortPredicate, *world)));
 		OnEntityUnmatch(entity);
+	}
+
+	int32_t GetEntityIndex(Entity entity)
+	{
+		auto search = std::ranges::lower_bound(entities, entity, SortCaller(sortPredicate, *world));
+		if (search == entities.end())
+			return -1;
+		return static_cast<int32_t>(std::distance(entities.begin(), search));
+	}
+
+	Entity GetEntityAtIndex(int32_t index) const
+	{
+		ASSERT(index >= 0 && index < static_cast<int32_t>(entities.size()) && "Index out of query range.");
+		return entities[index];
 	}
 
 	SortPredicate GetSortPredicate() { return sortPredicate; }
@@ -529,6 +548,15 @@ protected:
 	Signature signature;
 	QueryCallbacks callbacks;
 	SortPredicate sortPredicate;
+
+	struct SortCaller
+	{
+		SortCaller(SortPredicate pred, World& world) : pred(std::move(pred)), world(world) {}
+		bool operator()(Entity a, Entity b) const { return pred(world, a, b); }
+		SortPredicate pred;
+		World& world;
+	};
+	bool SortPredicateForward(Entity a, Entity b) const { return sortPredicate(*world, a, b); }
 
 private:
 	World* world;
@@ -550,6 +578,46 @@ public:
 	auto GetArchetype(Entity entity) const
 	{
 		return GetWorld().template GetComponents<Components...>(entity);
+	}
+
+	//auto GetComponentLists() // -> std::tuple<std::vector<Components*>...>
+	//{
+
+	//}
+
+	template <typename T>
+	auto GetComponentList() const -> std::enable_if_t<not is_reject_component_v<T> and std::disjunction_v<std::is_same<T, Components>...>, std::vector<std::reference_wrapper<T>>>
+	{
+		std::vector<std::reference_wrapper<T>> ret{};
+		for (Entity entity : entities)
+		{
+			ret.emplace_back(std::ref(GetWorld().GetComponent<T>(entity)));
+		}
+		return ret;
+	}
+
+	auto GetComponentLists() const
+	{
+		return GetComponentListsHelper<Components...>();
+	}
+
+private:
+	template <typename T>
+	auto GetFirstListHelper() const
+	{
+		if constexpr (is_reject_component_v<T>)
+			return std::tuple<>();
+		else
+			return std::tuple<std::vector<std::reference_wrapper<T>>>(GetComponentList<T>());
+	}
+
+	template <typename Head, typename... Tail>
+	auto GetComponentListsHelper() const
+	{
+		if constexpr (sizeof...(Tail) > 0)
+			return std::tuple_cat(GetFirstListHelper<Head>(), GetComponentListsHelper<Tail...>());
+		else
+			return GetFirstListHelper<Head>();
 	}
 };
 
@@ -728,6 +796,7 @@ public:
 		Entity newEntity = CreateEntity();
 
 		Signature signature = entityManager.GetSignature(entity);
+		Signature newSignature{};
 		ecs::Log("Clone Entity {} -> {}", entity, newEntity, signature);
 		ecs::Log("    Require: {}", componentManager.BuildSignatureLayerString(signature.require));
 		ecs::Log("    Reject: {}", componentManager.BuildSignatureLayerString(signature.reject));
@@ -745,16 +814,17 @@ public:
 			const char* nextTypeName = componentManager.GetComponentTypeName(nextType);
 			ecs::Log("    Add Component<{}>", nextTypeName);
 
-
 			if (auto [ptr, size] = componentManager.TryGetComponent(entity, nextType); ptr)
-				AddComponentUntyped(newEntity, nextType, ptr, size);
+				AddComponentUntypedNoNotify(newEntity, newSignature, nextType, ptr, size);
 		}
+		queryManager.OnEntitySignatureChanged(newEntity, newSignature, {});
 
 		return newEntity;
 	}
 
 	void DestroyEntity(Entity entity)
 	{
+		ecs::Log("[World] DestroyEntity {}", entity);
 		queryManager.OnEntitySignatureChanged(entity, Signature{}, entityManager.GetSignature(entity));
 		entityManager.DestroyEntity(entity);
 		componentManager.OnEntityDestroyed(entity);
@@ -775,12 +845,9 @@ public:
 	template <typename T>
 	T& AddComponent(Entity entity, const T& component)
 	{
-		T& result = componentManager.AddComponent<T>(entity, component);
-
 		Signature signature = entityManager.GetSignature(entity);
 		Signature oldSignature = signature;
-		signature.require.set(componentManager.GetComponentType<T>(), true);
-		entityManager.SetSignature(entity, signature);
+		T& result = AddComponentNoNotify(entity, signature, component);
 
 		queryManager.OnEntitySignatureChanged(entity, signature, oldSignature);
 
@@ -789,11 +856,9 @@ public:
 
 	void* AddComponentUntyped(Entity entity, ComponentType componentType, const void* source, size_t size)
 	{
-		void* result = componentManager.AddComponentUntyped(entity, componentType, source, size);
 		Signature signature = entityManager.GetSignature(entity);
 		Signature oldSignature = signature;
-		signature.require.set(componentType, true);
-		entityManager.SetSignature(entity, signature);
+		void* result = AddComponentUntypedNoNotify(entity, signature, componentType, source, size);
 
 		queryManager.OnEntitySignatureChanged(entity, signature, oldSignature);
 
@@ -968,6 +1033,27 @@ private:
 			return GetFirstHelper<Head>(entity);
 	}
 
+	template <typename T>
+	T& AddComponentNoNotify(Entity entity, Signature& signature, const T& component)
+	{
+		T& result = componentManager.AddComponent<T>(entity, component);
+
+		signature.require.set(componentManager.GetComponentType<T>(), true);
+		entityManager.SetSignature(entity, signature);
+
+		return result;
+	}
+
+	void* AddComponentUntypedNoNotify(Entity entity, Signature& signature, ComponentType componentType, const void* source, size_t size)
+	{
+		void* result = componentManager.AddComponentUntyped(entity, componentType, source, size);
+
+		signature.require.set(componentType, true);
+		entityManager.SetSignature(entity, signature);
+
+		return result;
+	}
+
 private:
 	EntityManager entityManager;
 	ComponentManager componentManager;
@@ -1056,6 +1142,8 @@ Query<Components...>* QueryManager::GetQueryById(QueryId queryId)
 // ReSharper disable once CppMemberFunctionMayBeConst
 inline void QueryManager::OnEntitySignatureChanged(Entity entity, Signature newSignature, Signature oldSignature)
 {
+	ecs::Log("[QueryManager] OnEntitySignatureChanged {}", entity);
+
 	for (const Signature& signature : signatures)
 	{
 		if (signature.Matches(newSignature) && !signature.Matches(oldSignature))
@@ -1065,13 +1153,13 @@ inline void QueryManager::OnEntitySignatureChanged(Entity entity, Signature newS
 				// Entity did not match query but now does, add it to the query entity list
 				QueryBase* query = GetQueryUntypedById(queryId);
 
+				ecs::Log("Query {} match Entity {}", queryId, entity);
+				LogCompareSignatures(world, "Match Query", signature, "Entity", newSignature);
+
 #ifdef _DEBUG
 				auto search = std::ranges::find(query->GetEntities(), entity);
 				ASSERT(search == query->GetEntities().end() && "Entity already exists in query.");
 #endif
-
-				ecs::Log("Query {} match Entity {}", queryId, entity);
-				LogCompareSignatures(world, "Match Query", signature, "Entity", newSignature);
 
 				query->AddEntity(entity);
 			}
@@ -1082,13 +1170,14 @@ inline void QueryManager::OnEntitySignatureChanged(Entity entity, Signature newS
 			{
 				// Entity no longer matches query but used to so remove it from the query entity list
 				QueryBase* query = GetQueryUntypedById(queryId);
+
+				ecs::Log("Query {} unmatch Entity {}", queryId, entity);
+				LogCompareSignatures(world, "Unmatch Query", signature, "Entity", newSignature);
+
 #ifdef _DEBUG
 				auto search = std::ranges::find(query->GetEntities(), entity);
 				ASSERT(search != query->GetEntities().end() && "Entity did not exist in query.");
 #endif
-
-				ecs::Log("Query {} unmatch Entity {}", queryId, entity);
-				LogCompareSignatures(world, "Unmatch Query", signature, "Entity", newSignature);
 
 				query->RemoveEntity(entity);
 			}

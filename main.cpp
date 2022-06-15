@@ -152,7 +152,7 @@ int main(int argc, char* argv[])
 		return Vec2{ rng.RangeF(bounds.Left(), bounds.Right()), rng.RangeF(bounds.Top(), bounds.Bottom()) };
 	};
 
-	constexpr int SPAWNER_COUNT = 1;
+	constexpr int SPAWNER_COUNT = 2;
 	for (auto spawnerEntities = world.CreateEntities<SPAWNER_COUNT>(); Entity spawner : spawnerEntities)
 	{
 		if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
@@ -160,7 +160,7 @@ int main(int argc, char* argv[])
 			//world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, rng.RangeF(5.0f, 10.0f), rng.RangeF(1, 10), 6 });
 			world.AddComponents(spawner,
 				Transform{position},
-				Spawner{ enemyPrefab, 0.5f, 0.5f, 6 });
+				Spawner{ enemyPrefab, 0.5f, 0.5f, 2 });
 		}
 	}
 
@@ -416,7 +416,7 @@ namespace internal
 {
 	void PrintAssert(const char* function, int lineNum, const char* exprStr)
 	{
-		printf("ASSERT FAILED (%s) in %s:%d\n", exprStr, function, lineNum);
+		debug::Log("ASSERT FAILED {:s} in {:s}:{:d}", exprStr, function, lineNum);
 	}
 }
 
