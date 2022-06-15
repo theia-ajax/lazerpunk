@@ -270,6 +270,7 @@ namespace types
 	{
 		return std::accumulate(rbuf.begin(), rbuf.end(), static_cast<T>(0)) / static_cast<T>(N);
 	}
+
 }
 
 struct Vec2

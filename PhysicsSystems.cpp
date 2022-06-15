@@ -12,7 +12,7 @@ void PhysicsSystem::SetMap(GameMapHandle handle)
 	if (activeMapHandle)
 	{
 		activeMap = map::Get(activeMapHandle);
-		activeSolidLayer = map::GetLayer<GameMapTileLayer>(activeMap.value(), "Tile Layer 1");
+		activeSolidLayer = map::GetLayer<GameMapTileLayer>(activeMap, "Tile Layer 1");
 	}
 }
 
@@ -77,13 +77,13 @@ void PhysicsSystem::Update(const GameTime& time)
 
 bool PhysicsSystem::MapSolid(const Vec2& point) const
 {
-	if (!(activeMap.has_value() && activeSolidLayer.has_value()))
+	if (!activeMap || !activeSolidLayer)
 		return false;
 
-	if (GameMap& map = activeMap.value(); !map.worldBounds.ContainsPoint(point))
+	if (!activeMap->worldBounds.ContainsPoint(point))
 		return false;
 
-	GameMapTileLayer& solidLayer = activeSolidLayer.value();
+	GameMapTileLayer& solidLayer = *activeSolidLayer;
 
 	auto [pointX, pointY] = point;
 	int px = math::FloorToInt(pointX);

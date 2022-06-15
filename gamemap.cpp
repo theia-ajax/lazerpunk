@@ -340,17 +340,18 @@ namespace
 		{
 			ASSERT(handle && "Invalid handle");
 			ASSERT(handle.handle <= kMaxLoadedMaps && "Invalid handle");
-			GameMap& map = Get(handle);
-			mapHandlesByName.erase(map.assetPathId);
-			map = {};
-			availableHandles.push(handle);
+			if (GameMap* map = Get(handle))
+			{
+				mapHandlesByName.erase(map->assetPathId);
+				availableHandles.push(handle);
+			}
 		}
 
-		GameMap& Get(GameMapHandle handle)
+		GameMap* Get(GameMapHandle handle)
 		{
 			ASSERT(handle && "Invalid handle");
 			ASSERT(handle.handle <= kMaxLoadedMaps && "Invalid handle");
-			return mapsByHandle[handle.handle - 1];
+			return &mapsByHandle[handle.handle - 1];
 		}
 
 		GameMapHandle LoadOrGet(const char* fileName)
@@ -363,7 +364,7 @@ namespace
 			}
 
 			GameMapHandle handle = Create();
-			Get(handle) = Load(fileName);
+			*Get(handle) = Load(fileName);
 			mapHandlesByName[assetPathId] = handle;
 			return handle;
 		}
@@ -384,47 +385,52 @@ GameMapHandle map::Load(const char* fileName)
 
 void map::Reload(GameMapHandle handle)
 {
-	GameMap& gameMap = mapManager.Get(handle);
-	gameMap = ::Load(gameMap.assetPathId.CStr());
+	if (GameMap* gameMap = mapManager.Get(handle))
+	{
+		*gameMap = ::Load(gameMap->assetPathId.CStr());
+	}
 }
 
-GameMap& map::Get(GameMapHandle handle)
+GameMap* map::Get(GameMapHandle handle)
 {
 	return mapManager.Get(handle);
 }
 
-std::optional<std::reference_wrapper<GameMapLayer>> map::GetLayer(GameMap& map, const char* layerName)
+GameMapLayer* map::GetLayer(GameMap* map, const char* layerName)
 {
-	std::stack<std::reference_wrapper<GameMapLayer>> layerStack;
-	for (auto& layer : map.layers)
-		layerStack.push(layer);
+	if (!map)
+		return nullptr;
+
+	std::stack<GameMapLayer*> layerStack;
+	for (GameMapLayer& layer : map->layers)
+		layerStack.push(&layer);
 
 	StrId searchId = layerName;
 
 	while (!layerStack.empty())
 	{
-		auto& layer = layerStack.top();
+		auto layer = layerStack.top();
 
-		if (StrId layerNameId = GetLayerNameId(layer); layerNameId == searchId)
+		if (StrId layerNameId = GetLayerNameId(*layer); layerNameId == searchId)
 			return layer;
 
-		auto subLayers = std::visit([](auto&& arg) -> std::vector<std::reference_wrapper<GameMapLayer>>
+		auto subLayers = std::visit([](auto&& arg) -> std::vector<GameMapLayer*>
 			{
 				using T = std::decay_t<decltype(arg)>;
-				std::vector<std::reference_wrapper<GameMapLayer>> r;
+				std::vector<GameMapLayer*> r;
 				if constexpr (std::is_same_v<T, GameMapGroupLayer>)
 				{
 					auto& subLayers = arg.layers;
 					r.reserve(subLayers.size());
 					for (auto& subLayer : subLayers)
-						r.emplace_back(subLayer);
+						r.emplace_back(&subLayer);
 					return r;
 				}
 				else
 				{
 					return r;
 				}
-			}, layer.get());
+			}, *layer);
 
 		layerStack.pop();
 
@@ -433,7 +439,7 @@ std::optional<std::reference_wrapper<GameMapLayer>> map::GetLayer(GameMap& map, 
 
 	}
 
-	return {};
+	return nullptr;
 }
 
 namespace

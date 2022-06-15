@@ -148,7 +148,7 @@ int main(int argc, char* argv[])
 
 	auto randomMapPosition = [map, &rng]()
 	{
-		Bounds2D bounds = map::Get(map).worldBounds;
+		Bounds2D bounds = map::Get(map)->worldBounds;
 		return Vec2{ rng.RangeF(bounds.Left(), bounds.Right()), rng.RangeF(bounds.Top(), bounds.Bottom()) };
 	};
 
@@ -213,7 +213,7 @@ int main(int argc, char* argv[])
 	int frameCountThisSecond = 0;
 	int fps = 0;
 	uint64_t frameTicks = 0;
-	ring_buf<uint64_t, 120> frameTickMeasures{};
+	ring_buf<uint64_t, 60> frameTickMeasures{};
 	uint64_t averageFrameTick = 0;
 
 	bool isRunning = true;
@@ -283,7 +283,7 @@ int main(int argc, char* argv[])
 			averageFrameTick = types::average(frameTickMeasures);
 		}
 
-		debug::Watch("FPS: {:d}, Frame: {:.3f}ms", fps, stm_ms(averageFrameTick));
+		debug::Watch("FPS: {:d}, Frame: {:.3f}ms, Max: {:.3f}ms", fps, stm_ms(averageFrameTick), stm_ms(*std::ranges::max_element(frameTickMeasures)));
 		debug::Watch("Entities: {:d}", world.GetEntityCount());
 
 		GameTime gameTime(elapsedSec, deltaSec);

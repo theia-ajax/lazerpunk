@@ -110,8 +110,8 @@ namespace map
 {
 	GameMapHandle Load(const char* fileName);
 	void Reload(GameMapHandle handle);
-	GameMap& Get(GameMapHandle handle);
-	std::optional<std::reference_wrapper<GameMapLayer>> GetLayer(GameMap& map, const char* layerName);
+	GameMap* Get(GameMapHandle handle);
+	GameMapLayer* GetLayer(GameMap* map, const char* layerName);
 
 	template <typename, typename>
 	constexpr bool is_one_of_variants_types = false;
@@ -121,22 +121,22 @@ namespace map
 		= (std::is_same_v<T, Ts> || ...);
 
 	template <typename T>
-	auto GetLayer(GameMap& map, const char* layerName) -> std::enable_if_t<is_one_of_variants_types<GameMapLayer, T>, std::optional<std::reference_wrapper<T>>>
+	auto GetLayer(GameMap* map, const char* layerName) -> std::enable_if_t<is_one_of_variants_types<GameMapLayer, T>, T*>
 	{
-		if (auto untypedLayer = GetLayer(map, layerName); untypedLayer.has_value())
+		if (GameMapLayer* untypedLayer = GetLayer(map, layerName); untypedLayer)
 		{
-			return std::visit([](auto&& arg) -> std::optional<std::reference_wrapper<T>>
+			return std::visit([](auto&& arg) -> T*
 				{
 					using LT = std::decay_t<decltype(arg)>;
 					if constexpr (std::is_same_v<T, LT>)
 					{
-						return std::ref(arg);
+						return &arg;
 					}
 					return {};
 
-				}, untypedLayer.value().get());
+				}, *untypedLayer);
 		}
-		return {};
+		return nullptr;
 	}
 
 	constexpr StrId GetLayerNameId(const GameMapLayer& layer)

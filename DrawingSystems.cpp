@@ -28,8 +28,8 @@ void GameMapRenderSystem::RenderLayers(const DrawContext& ctx, const StrId* laye
 		auto [transform, mapRender] = GetArchetype(entity);
 		if (mapRender.mapHandle)
 		{
-			const auto& map = map::Get(mapRender.mapHandle);
-			map::DrawLayers(ctx, map, viewSystem->ActiveCamera(), ctx.sheet, layers, count);
+			if (GameMap* map = map::Get(mapRender.mapHandle))
+				map::DrawLayers(ctx, *map, viewSystem->ActiveCamera(), ctx.sheet, layers, count);
 		}
 	}
 }

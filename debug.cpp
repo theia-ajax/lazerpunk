@@ -101,7 +101,7 @@ void debug::DrawWatch(const DrawContext& ctx, Color color)
 	}
 
 	int padX = 8, padY = 8, halfPadX = padX / 2, halfPadY = padY / 2;
-	int canvasX = ctx.canvas.x * 2;
+	int canvasX = static_cast<int>(ctx.canvas.x * 2.5f);
 	int canvasY = ctx.canvas.y * 4;
 
 	uint32_t wrapLen = static_cast<uint32_t>(canvasX - halfPadX);
@@ -132,7 +132,7 @@ void debug::DrawWatch(const DrawContext& ctx, Color color)
 	SDL_UnlockTexture(watchTexture);
 
 	SDL_SetRenderDrawBlendMode(ctx.renderer, SDL_BLENDMODE_BLEND);
-	SDL_Rect drawRect{ 0, 0, ctx.canvas.x / 4, ctx.canvas.y / 2 };
+	SDL_Rect drawRect{ 0, 0, static_cast<int>(ctx.canvas.x / 2.5f), ctx.canvas.y / 2 };
 	SDL_RenderCopy(ctx.renderer, watchTexture, nullptr, &drawRect);
 }
 

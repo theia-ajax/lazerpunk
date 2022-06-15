@@ -16,8 +16,8 @@ struct PhysicsSystem final : System<PhysicsSystem, Transform, PhysicsBody>
 
 private:
 	GameMapHandle activeMapHandle{};
-	std::optional<std::reference_wrapper<GameMap>> activeMap;
-	std::optional<std::reference_wrapper<GameMapTileLayer>> activeSolidLayer;
+	GameMap* activeMap = nullptr;
+	GameMapTileLayer* activeSolidLayer = nullptr;
 };
 
 struct PhysicsBodyVelocitySystem final : System<PhysicsBodyVelocitySystem, Velocity, PhysicsBody>
