@@ -245,30 +245,21 @@ void SpawnerSystem::Update(const GameTime& time)
 
 	if (!GetEntities().empty() && input::GetKeyDown(SDL_SCANCODE_K))
 	{
-		auto& entities = spawnSourceQuery->GetEntities();
 		auto sources = spawnSourceQuery->GetComponentList<SpawnSource>();
 
-		Entity entity = GetEntities()[0];
-		auto first = std::ranges::lower_bound(sources, SpawnSource{ entity }, [](SpawnSource a, SpawnSource b) { return a.source < b.source; });
-		auto last = std::ranges::upper_bound(sources, SpawnSource{ entity }, [](SpawnSource a, SpawnSource b) { return a.source < b.source; });
-		auto dist = std::distance(first, last);
-		int32_t removed = std::accumulate(first, last, static_cast<int32_t>(first - sources.begin()),
-			[this](int32_t index, const SpawnSource& source)
-			{
-				Entity spawned = spawnSourceQuery->GetEntityAtIndex(index);
-				GetWorld().AddComponent(spawned, Expiration{});
-				return index + 1;
-			});
-		
-		//std::ranges::for_each_n(first, dist, [this](Entity spawned) { GetWorld().DestroyEntity(spawned); });
-		//for (Entity spawned : spawnSourceQuery->GetEntities())
-		//{
-		//	auto [source] = GetWorld().GetComponent<SpawnSource>(spawned);
-		//	if (source == entity)
-		//	{
-		//		GetWorld().DestroyEntity(spawned);
-		//		break;
-		//	}
-		//}
+		for (Entity entity : GetEntities())
+		{
+			auto first = std::ranges::lower_bound(sources, SpawnSource{ entity }, [](SpawnSource a, SpawnSource b) { return a.source < b.source; });
+			auto last = std::ranges::upper_bound(sources, SpawnSource{ entity }, [](SpawnSource a, SpawnSource b) { return a.source < b.source; });
+			int32_t removed = std::accumulate(first, last, static_cast<int32_t>(first - sources.begin()),
+				[this](int32_t index, const SpawnSource& source)
+				{
+					Entity spawned = spawnSourceQuery->GetEntityAtIndex(index);
+					GetWorld().DestroyEntity(spawned); // investigate Destroy/DestroyImmediate, create DestroyTag, Reject<DestroyTag> outright?
+					//GetWorld().AddComponent<Expiration>(spawned, {}); works much more reliably, need to investigate updating query appropriately as 
+					return index + 1;
+				});
+			sources.erase(first, last);
+		}
 	}
 }
