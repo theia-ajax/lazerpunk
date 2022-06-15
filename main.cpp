@@ -152,7 +152,7 @@ int main(int argc, char* argv[])
 		return Vec2{ rng.RangeF(bounds.Left(), bounds.Right()), rng.RangeF(bounds.Top(), bounds.Bottom()) };
 	};
 
-	constexpr int SPAWNER_COUNT = 10;
+	constexpr int SPAWNER_COUNT = 1;
 	for (auto spawnerEntities = world.CreateEntities<SPAWNER_COUNT>(); Entity spawner : spawnerEntities)
 	{
 		if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)

@@ -183,6 +183,12 @@ void SpawnerSystem::OnRegistered()
 					if (entity == source)
 						GetWorld().GetComponent<Spawner>(entity).spawnedEnemies--;
 				}}
+		},
+		[](World& world, Entity a, Entity b)
+		{
+			auto& [sourceA] = world.GetComponent<SpawnSource>(a);
+			auto& [sourceB] = world.GetComponent<SpawnSource>(b);
+			return sourceA < sourceB;
 		});
 }
 
@@ -236,14 +242,25 @@ void SpawnerSystem::Update(const GameTime& time)
 
 		if (input::GetKeyDown(SDL_SCANCODE_K))
 		{
-			for (Entity spawned : spawnSourceQuery->GetEntities())
+			auto first = std::ranges::lower_bound(spawnSourceQuery->GetEntities(), entity, [this](Entity a, Entity b)
 			{
-				if (auto [source] = GetWorld().GetComponent<SpawnSource>(spawned); source == entity)
-				{
-					GetWorld().DestroyEntity(spawned);
-					break;
-				}
-			}
+				return b < GetWorld().GetComponent<SpawnSource>(a).source;
+			});
+			auto last = std::ranges::upper_bound(spawnSourceQuery->GetEntities(), entity, [this](Entity a, Entity b)
+			{
+				return a < GetWorld().GetComponent<SpawnSource>(b).source;
+			});
+			auto dist = std::distance(first, last);
+			std::ranges::for_each_n(first, dist, [this](Entity spawned) { GetWorld().AddComponent<Expiration>(spawned, {}); });
+			//for (Entity spawned : spawnSourceQuery->GetEntities())
+			//{
+			//	auto [source] = GetWorld().GetComponent<SpawnSource>(spawned);
+			//	if (source == entity)
+			//	{
+			//		GetWorld().DestroyEntity(spawned);
+			//		break;
+			//	}
+			//}
 		}
 	}
 }

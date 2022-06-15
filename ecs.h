@@ -472,20 +472,25 @@ struct QueryCallbacks
 	void OnEntityUnmatch(Entity entity) const { if (onEntityUnmatch) onEntityUnmatch(entity); }
 };
 
+static constexpr bool DefaultQuerySort(const World& world, Entity a, Entity b) { return a < b; }
+
 class QueryBase  // NOLINT(cppcoreguidelines-special-member-functions)
 {
 public:
+	using SortPredicate = std::function<bool(World&, Entity, Entity)>;
+
 	QueryBase() = delete;
 	QueryBase(const QueryBase& other) = delete;
 	QueryBase(QueryBase&& other) = delete;
 	QueryBase operator=(const QueryBase& other) = delete;
 	QueryBase operator=(QueryBase&& other) = delete;
 
-	explicit QueryBase(QueryId queryId, World* world, Signature signature, QueryCallbacks callbacks)
-		: queryId(queryId)
-		, signature(signature)
-		, callbacks(std::move(callbacks))
-		, world(world) {}
+	explicit QueryBase(QueryId _queryId, World* _world, Signature _signature, QueryCallbacks _callbacks, SortPredicate _sortPredicate)
+		: queryId(_queryId)
+		, signature(_signature)
+		, callbacks(std::move(_callbacks))
+		, sortPredicate(std::move(_sortPredicate))
+		, world(_world) {}
 
 	World& GetWorld() const { return *world; }
 	const std::vector<Entity>& GetEntities() { return entities; }
@@ -505,21 +510,25 @@ public:
 
 	void AddEntity(Entity entity)
 	{
-		entities.insert(std::ranges::upper_bound(entities, entity), entity);
+		entities.insert(std::ranges::upper_bound(entities, entity, [this](Entity a, Entity b) { return sortPredicate(*world, a, b); }), entity);
 		OnEntityMatch(entity);
 	}
 
 	void RemoveEntity(Entity entity)
 	{
-		entities.erase(std::ranges::lower_bound(entities, entity));
+		entities.erase(std::ranges::lower_bound(entities, entity, [this](Entity a, Entity b) { return sortPredicate(*world, a, b); }));
 		OnEntityUnmatch(entity);
 	}
+
+	SortPredicate GetSortPredicate() { return sortPredicate; }
+	std::function<bool(Entity, Entity)> GetPredicate() const { return [this](Entity a, Entity b) { return sortPredicate(GetWorld(), a, b); }; }
 
 protected:
 	QueryId queryId;
 	std::vector<Entity> entities;
 	Signature signature;
 	QueryCallbacks callbacks;
+	SortPredicate sortPredicate;
 
 private:
 	World* world;
@@ -535,8 +544,8 @@ public:
 	Query operator=(const Query& other) = delete;
 	Query operator=(Query&& other) = delete;
 
-	explicit Query(QueryId queryId, World* world, Signature signature, QueryCallbacks callbacks)
-		: QueryBase(queryId, world, signature, callbacks) { }
+	explicit Query(QueryId _queryId, World* _world, Signature _signature, QueryCallbacks _callbacks, SortPredicate _sortPredicate)
+		: QueryBase(_queryId, _world, _signature, _callbacks, _sortPredicate) { }
 
 	auto GetArchetype(Entity entity) const
 	{
@@ -549,7 +558,7 @@ class QueryManager
 public:
 	explicit QueryManager(World& world) : world(world) {}
 
-	template <class... Components> Query<Components...>* CreateQuery(QueryCallbacks callbacks = {});
+	template <class... Components> Query<Components...>* CreateQuery(QueryCallbacks callbacks, QueryBase::SortPredicate sortPredicate);
 	QueryBase* GetQueryUntypedById(QueryId queryId) const;
 	template <class... Components> Query<Components...>* GetQueryById(QueryId queryId);
 
@@ -899,9 +908,9 @@ public:
 	}
 
 	template <typename... Components>
-	Query<Components...>* CreateQuery(QueryCallbacks callbacks = {})
+	Query<Components...>* CreateQuery(QueryCallbacks callbacks = {}, QueryBase::SortPredicate sortPredicate = DefaultQuerySort)
 	{
-		auto query = queryManager.CreateQuery<Components...>(callbacks);
+		auto query = queryManager.CreateQuery<Components...>(callbacks, sortPredicate);
 		query->InitializeEntityList(entityManager);
 		return query;
 	}
@@ -1013,7 +1022,7 @@ auto System<T, Components...>::GetSystemQuery()
 }
 
 template <class ... Components>
-Query<Components...>* QueryManager::CreateQuery(QueryCallbacks callbacks)
+Query<Components...>* QueryManager::CreateQuery(QueryCallbacks callbacks, QueryBase::SortPredicate sortPredicate)
 {
 	Signature signature = world.BuildSignature<Components...>();
 
@@ -1023,7 +1032,7 @@ Query<Components...>* QueryManager::CreateQuery(QueryCallbacks callbacks)
 	queriesBySignature[signature].emplace_back(queryId);
 
 	LogSignature(world, "Create Query", signature);
-	queries[queryId] = std::make_unique<Query<Components...>>(queryId, &world, signature, callbacks);
+	queries[queryId] = std::make_unique<Query<Components...>>(queryId, &world, signature, callbacks, std::move(sortPredicate));
 	QueryBase* baseQuery = queries[queryId].get();
 	return static_cast<Query<Components...>*>(baseQuery);
 }
