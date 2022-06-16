@@ -1,6 +1,12 @@
 ﻿#include "CoreSystems.h"
 
 
+void DestroyEntitySystem::Update()
+{
+	for (std::vector<Entity> entitiesCopy = GetEntities(); Entity entity : entitiesCopy)
+		GetWorld().DestroyEntity(entity);
+}
+
 void EntityExpirationSystem::Update(const GameTime& time)
 {
 	std::queue<Entity> removeQueue{};
@@ -17,7 +23,10 @@ void EntityExpirationSystem::Update(const GameTime& time)
 
 	while (!removeQueue.empty())
 	{
-		GetWorld().DestroyEntity(removeQueue.front());
+		struct test { uint8_t v; };
+		constexpr size_t sz = sizeof(DestroyEntityTag);
+		constexpr size_t sz1 = sizeof(test);
+		GetWorld().AddTag<DestroyEntityTag>(removeQueue.front());
 		removeQueue.pop();
 	}
 }

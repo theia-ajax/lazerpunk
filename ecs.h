@@ -18,7 +18,7 @@
 #include "types.h"
 
 #ifndef ENABLE_ECS_LOGGING
-#define ENABLE_ECS_LOGGING 0
+#define ENABLE_ECS_LOGGING 1
 #endif
 
 #if ENABLE_ECS_LOGGING
@@ -40,6 +40,8 @@ constexpr Entity kInvalidEntity = 0;
 using ComponentType = uint8_t;
 constexpr ComponentType kMaxComponents = 64;
 
+struct Prefab {};
+
 template <typename T>
 struct Reject { using Component = T; };
 
@@ -55,7 +57,56 @@ struct is_reject_component : is_specialization<T, Reject> {};
 template <typename T>
 inline constexpr bool is_reject_component_v = is_reject_component<T>::value;
 
-struct Prefab {};
+template <typename... T>
+struct component_reject_filter;
+
+template <>
+struct component_reject_filter<>
+{
+	using type = std::tuple<>;
+};
+
+template <typename T>
+struct component_reject_filter<T>
+{
+	using type = typename std::conditional_t<not is_reject_component_v<std::decay_t<T>>, std::tuple<T>, std::tuple<>>;
+};
+
+template <typename T, typename... Ts>
+struct component_reject_filter<T, Ts...>
+{
+	using type = decltype(std::tuple_cat(component_reject_filter<T>::type(), component_reject_filter<Ts...>::type()));
+};
+
+template <typename... T>
+using component_reject_filter_t = typename component_reject_filter<T...>::type;
+
+template <typename T>
+using component_ref_vector_t = std::vector<std::reference_wrapper<T>>;
+
+template <typename... T>
+struct component_ref_vector_reject_filter;
+
+template <>
+struct component_ref_vector_reject_filter<>
+{
+	using type = std::tuple<>;
+};
+
+template <typename T>
+struct component_ref_vector_reject_filter<T>
+{
+	using type = typename std::conditional_t<not is_reject_component_v<T>, std::tuple<component_ref_vector_t<T>>, std::tuple<>>;
+};
+
+template <typename T, typename... Ts>
+struct component_ref_vector_reject_filter<T, Ts...>
+{
+	using type = decltype(std::tuple_cat(component_ref_vector_reject_filter<T>::type(), component_ref_vector_reject_filter<Ts...>::type()));
+};
+
+template <typename... T>
+using component_ref_vector_reject_filter_t = typename component_ref_vector_reject_filter<T...>::type;
 
 // Signatures represent which 
 struct Signature
@@ -513,15 +564,34 @@ public:
 			OnEntityMatch(addedEntity);
 	}
 
+	virtual void InsertLists(ptrdiff_t index, Entity entity) {}
+	virtual void RemoveLists(ptrdiff_t index) {}
+
+	void Insert(ptrdiff_t index, Entity entity)
+	{
+		entities.insert(entities.begin() + index, entity);
+		InsertLists(index, entity);
+	}
+
+	void Remove(ptrdiff_t index)
+	{
+		entities.erase(entities.begin() + index);
+		RemoveLists(index);
+	}
+
 	void AddEntity(Entity entity)
 	{
-		entities.insert(std::ranges::upper_bound(entities, entity, SortCaller(sortPredicate, *world)), entity);
+		auto insertAt = std::ranges::upper_bound(entities, entity, SortCaller(sortPredicate, *world));
+		auto index = std::distance(entities.begin(), insertAt);
+		Insert(index, entity);
 		OnEntityMatch(entity);
 	}
 
 	void RemoveEntity(Entity entity)
 	{
-		entities.erase(std::ranges::lower_bound(entities, entity, SortCaller(sortPredicate, *world)));
+		auto eraseAt = std::ranges::lower_bound(entities, entity, SortCaller(sortPredicate, *world));
+		auto index = std::distance(entities.begin(), eraseAt);
+		Remove(index);
 		OnEntityUnmatch(entity);
 	}
 
@@ -562,10 +632,15 @@ private:
 	World* world;
 };
 
+
+
+
 template <typename... Components>
 class Query final : public QueryBase
 {
 public:
+	using TypeSignature = component_reject_filter_t<Components...>;
+
 	Query() = delete;
 	Query(const Query& other) = delete;
 	Query(Query&& other) = delete;
@@ -586,14 +661,9 @@ public:
 	//}
 
 	template <typename T>
-	auto GetComponentList() const -> std::enable_if_t<not is_reject_component_v<T> and std::disjunction_v<std::is_same<T, Components>...>, std::vector<std::reference_wrapper<T>>>
+	auto GetComponentList() -> std::enable_if_t<not is_reject_component_v<T> and std::disjunction_v<std::is_same<T, Components>...>, std::vector<std::reference_wrapper<T>>&>
 	{
-		std::vector<std::reference_wrapper<T>> ret{};
-		for (Entity entity : entities)
-		{
-			ret.emplace_back(std::ref(GetWorld().GetComponent<T>(entity)));
-		}
-		return ret;
+		return std::get<component_ref_vector_t<T>>(componentLists);
 	}
 
 	auto GetComponentLists() const
@@ -601,6 +671,11 @@ public:
 		return GetComponentListsHelper<Components...>();
 	}
 
+	void InsertLists(ptrdiff_t index, Entity entity) override;
+	
+	void RemoveLists(ptrdiff_t index) override;
+
+	component_ref_vector_reject_filter_t<Components...> componentLists;
 private:
 	template <typename T>
 	auto GetFirstListHelper() const
@@ -619,6 +694,7 @@ private:
 		else
 			return GetFirstListHelper<Head>();
 	}
+
 };
 
 class QueryManager
@@ -854,6 +930,13 @@ public:
 		return result;
 	}
 
+	template <typename T>
+	auto AddTag(Entity entity) -> std::enable_if_t<std::is_empty_v<T>, void>
+	{
+		if (!HasComponent<T>(entity))
+			AddComponent<T>(entity, {});
+	}
+
 	void* AddComponentUntyped(Entity entity, ComponentType componentType, const void* source, size_t size)
 	{
 		Signature signature = entityManager.GetSignature(entity);
@@ -868,7 +951,14 @@ public:
 	template <typename... Components>
 	std::tuple<Components&...> AddComponents(Entity entity, Components... components)
 	{
-		return AddComponentsHelper(entity, components...);
+		Signature signature = entityManager.GetSignature(entity);
+		Signature oldSignature = signature;
+
+		auto result = AddComponentsHelper(entity, signature, components...);
+
+		queryManager.OnEntitySignatureChanged(entity, signature, oldSignature);
+
+		return result;
 	}
 
 	template <typename T>
@@ -1004,15 +1094,15 @@ private:
 	}
 
 	template <typename Head, typename... Tail>
-	std::tuple<Head&, Tail&...> AddComponentsHelper(Entity entity, const Head& head, const Tail&... tail)
+	std::tuple<Head&, Tail&...> AddComponentsHelper(Entity entity, Signature& signature, const Head& head, const Tail&... tail)
 	{
 		if constexpr (sizeof...(tail) > 0)
 		{
-			auto first = std::tuple<Head&>(AddComponent(entity, head));
-			return std::tuple_cat(first, AddComponentsHelper(entity, tail...));
+			auto first = std::tuple<Head&>(AddComponentNoNotify(entity, signature, head));
+			return std::tuple_cat(first, AddComponentsHelper(entity, signature, tail...));
 		}
 		else
-			return std::tuple<Head&>(AddComponent(entity, head));
+			return std::tuple<Head&>(AddComponentNoNotify(entity, signature, head));
 	}
 
 	template <typename T>
@@ -1036,6 +1126,8 @@ private:
 	template <typename T>
 	T& AddComponentNoNotify(Entity entity, Signature& signature, const T& component)
 	{
+		ecs::Log("AddComponent<{}> to Entity {}", typeid(T).name() + 7, entity);
+
 		T& result = componentManager.AddComponent<T>(entity, component);
 
 		signature.require.set(componentManager.GetComponentType<T>(), true);
@@ -1046,6 +1138,8 @@ private:
 
 	void* AddComponentUntypedNoNotify(Entity entity, Signature& signature, ComponentType componentType, const void* source, size_t size)
 	{
+		ecs::Log("AddComponent<{}> to Entity {}", GetComponentTypeName(componentType), entity);
+
 		void* result = componentManager.AddComponentUntyped(entity, componentType, source, size);
 
 		signature.require.set(componentType, true);
@@ -1107,7 +1201,51 @@ auto System<T, Components...>::GetSystemQuery()
 	return systemQuery;
 }
 
-template <class ... Components>
+template <class F, class... Args>
+void for_each_argument(F f, Args&&... args) {
+	(void)std::initializer_list<int>{(f(std::forward<Args>(args)), 0)...};
+}
+
+template <typename TVec, typename TFieldTuple, std::size_t... TIdxs>
+void insert_tuple_vector(TVec& vec, ptrdiff_t index, TFieldTuple ft, std::index_sequence<TIdxs...>)
+{
+	for_each_argument([&](auto idx)
+		{
+			auto insertAt = std::get<idx>(vec).begin() + index;
+			std::get<idx>(vec).insert(insertAt, std::get<idx>(ft));
+		}, std::integral_constant<std::size_t, TIdxs>{}...);
+}
+
+template <typename TVec, std::size_t... TIdxs>
+void erase_tuple_vector(TVec& vec, ptrdiff_t index, std::index_sequence<TIdxs...>)
+{
+	for_each_argument([&](auto idx)
+		{
+			auto eraseAt = std::get<idx>(vec).begin() + index;
+			std::get<idx>(vec).erase(eraseAt);
+		}, std::integral_constant<std::size_t, TIdxs>{}...);
+}
+
+template <typename... Components>
+void Query<Components...>::InsertLists(ptrdiff_t index, Entity entity)
+{
+	auto comps = GetArchetype(entity);
+	
+	insert_tuple_vector(componentLists,
+		index,
+		comps,
+		std::make_index_sequence<std::tuple_size_v<decltype(comps)>>());
+}
+
+template <typename... Components>
+void Query<Components...>::RemoveLists(ptrdiff_t index)
+{
+	QueryBase::RemoveLists(index);
+
+	erase_tuple_vector(componentLists, index, std::make_index_sequence<std::tuple_size_v<decltype(componentLists)>>());
+}
+
+template <class... Components>
 Query<Components...>* QueryManager::CreateQuery(QueryCallbacks callbacks, QueryBase::SortPredicate sortPredicate)
 {
 	Signature signature = world.BuildSignature<Components...>();
@@ -1142,6 +1280,9 @@ Query<Components...>* QueryManager::GetQueryById(QueryId queryId)
 // ReSharper disable once CppMemberFunctionMayBeConst
 inline void QueryManager::OnEntitySignatureChanged(Entity entity, Signature newSignature, Signature oldSignature)
 {
+	if (newSignature == oldSignature)
+		return;
+
 	ecs::Log("[QueryManager] OnEntitySignatureChanged {}", entity);
 
 	for (const Signature& signature : signatures)

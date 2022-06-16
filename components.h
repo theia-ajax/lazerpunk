@@ -6,6 +6,8 @@
 #include "gamemap.h"
 
 // Core
+struct DestroyEntityTag {};
+
 struct Expiration
 {
 	float secRemaining{};

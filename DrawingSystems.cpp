@@ -36,7 +36,7 @@ void GameMapRenderSystem::RenderLayers(const DrawContext& ctx, const StrId* laye
 
 void SpriteFacingSystem::Update()
 {
-	for (Entity entity : GetEntities())
+	for (auto& entities = GetEntities(); Entity entity : entities)
 	{
 		switch (auto [facing, facingSprites, sprite] = GetArchetype(entity); facing.facing)
 		{

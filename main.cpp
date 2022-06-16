@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
 	debug::DevConsoleAddCommand("ssv", [&ssv] { ssv.visible = !ssv.visible; return 0; });
 
 	world.RegisterComponents<
-		Expiration,
+		DestroyEntityTag, Expiration,
 		Transform, Velocity,
 		GameInputGather, GameInput,
 		PlayerControl, PlayerShootControl,
@@ -71,6 +71,7 @@ int main(int argc, char* argv[])
 		PhysicsBody, Collider::Box, Collider::Circle, PhysicsNudge,
 		DebugMarker>();
 
+	auto destroyEntitySystem = DestroyEntitySystem::Register(world);
 	auto expirationSystem = EntityExpirationSystem::Register(world);
 	auto viewSystem = ViewSystem::Register(world);
 	auto gatherInputSystem = GatherInputSystem::Register(world);
@@ -289,6 +290,7 @@ int main(int argc, char* argv[])
 		GameTime gameTime(elapsedSec, deltaSec);
 
 		expirationSystem->Update(gameTime);
+		destroyEntitySystem->Update();
 		spawnerSystem->Update(gameTime);
 		gatherInputSystem->Update(gameTime);
 		playerControlSystem->Update(gameTime);

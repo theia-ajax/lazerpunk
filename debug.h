@@ -62,8 +62,6 @@ namespace debug
 		virtual std::any callParse(const std::vector<std::string>& args) = 0;
 	};
 
-	template<int N, typename... Ts> using type_n_t = std::tuple_element_t<N, std::tuple<Ts...>>;
-
 	template<class T, class F>
 	auto parse_string_to_any(F const& f) -> std::pair<const std::type_index, std::function<std::any(std::string)>>
 	{
@@ -112,7 +110,7 @@ namespace debug
 
 		template <size_t... Is>
 		auto make_tuple_parse_impl(const std::vector<std::string>& anyArgs, std::index_sequence<Is...>) {
-			return std::make_tuple(parse_any<std::decay_t<type_n_t<Is, A...>>>(anyArgs.at(Is))...);
+			return std::make_tuple(parse_any<std::decay_t<type_at_index_t<Is, A...>>>(anyArgs.at(Is))...);
 		}
 
 		template <size_t N>

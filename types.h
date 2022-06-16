@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <numeric>
+#include <type_traits>
 
 #include "enumflag.h"
 #include "stringid.h"
@@ -26,6 +27,21 @@ namespace internal { void PrintAssert(const char* function, int lineNum, const c
 #else
 #define ASSERT(expr)
 #endif
+
+template<int N, typename... Ts>
+using type_at_index_t = std::tuple_element_t<N, std::tuple<Ts...>>;
+
+template <typename T, typename... Ts>
+struct typepack_index_of;
+
+template <typename T, typename... Ts>
+struct typepack_index_of<T, T, Ts...> : std::integral_constant<size_t, 0> {};
+
+template <typename T, typename U, typename... Ts>
+struct typepack_index_of<T, U, Ts...> : std::integral_constant<size_t, 1 + typepack_index_of<T, Ts...>::value> {};
+
+template <typename T, typename... Ts>
+inline constexpr size_t typepack_index_of_v = typepack_index_of<T, Ts...>::value;
 
 constexpr int mod(int a, int b)
 {
