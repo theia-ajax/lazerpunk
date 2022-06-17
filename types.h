@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <numbers>
 #include <numeric>
 #include <type_traits>
 
@@ -58,8 +59,20 @@ namespace math
 	using std::clamp;
 	using std::abs;
 
-	constexpr float Epsilon = FLT_EPSILON * 4;
-	constexpr float Root2 = 1.414213562f;
+	constexpr float Epsilon = std::numeric_limits<float>::epsilon() * 4;
+	constexpr float Sqrt2 = std::numbers::sqrt2_v<float>;
+	constexpr float Sqrt3 = std::numbers::sqrt3_v<float>;
+	constexpr float InvSqrt3 = std::numbers::inv_sqrt3_v<float>;
+	constexpr float Pi = std::numbers::pi_v<float>;
+	constexpr float TwoPi = std::numbers::pi_v<float> * 2;
+	constexpr float PiOver2 = std::numbers::pi_v<float> / 2;
+	constexpr float PiOver4 = std::numbers::pi_v<float> / 4;
+	constexpr float InvPi = std::numbers::inv_pi_v<float>;
+	constexpr float InvSqrtPi = std::numbers::inv_sqrtpi_v<float>;
+	constexpr float E = std::numbers::e_v<float>;
+	constexpr float Log2E = std::numbers::log2e_v<float>;
+	constexpr float Log10E = std::numbers::log10e_v<float>;
+	constexpr float Phi = std::numbers::phi_v<float>; // Golden ratio
 
 	inline bool ApproxEqual(float a, float b)
 	{
@@ -312,10 +325,10 @@ namespace vec2
 	constexpr Vec2 Half{ 0.5f, 0.5f };
 	constexpr Vec2 UnitX{ 1, 0 };
 	constexpr Vec2 UnitY{ 0, 1 };
-	constexpr Vec2 UpRight{ math::Root2, math::Root2 };
-	constexpr Vec2 UpLeft{ -math::Root2, math::Root2 };
-	constexpr Vec2 DownLeft{ -math::Root2, -math::Root2 };
-	constexpr Vec2 DownRight{ math::Root2, -math::Root2 };
+	constexpr Vec2 UpRight{ math::Sqrt2, math::Sqrt2 };
+	constexpr Vec2 UpLeft{ -math::Sqrt2, math::Sqrt2 };
+	constexpr Vec2 DownLeft{ -math::Sqrt2, -math::Sqrt2 };
+	constexpr Vec2 DownRight{ math::Sqrt2, -math::Sqrt2 };
 	
 	template<typename T>
 	constexpr Vec2 Create(T x, T y)

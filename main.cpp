@@ -2,6 +2,7 @@
 
 #include <array>
 #include <format>
+#include <numbers>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_ttf.h>
 
@@ -31,6 +32,155 @@ void SpriteSheetViewControl(SpriteSheetViewContext& ssv);
 void SpriteSheetViewRender(const DrawContext& ctx, const SpriteSheetViewContext& ssv);
 void PrintStringReport(const StringReport& report);
 
+struct TestColor
+{
+	Color color = { 255, 255, 255, 255 };
+};
+
+struct TestSize
+{
+	float size = 1.0f;
+};
+
+struct TestIndex
+{
+	int index{};
+	float radius = 1;
+	float time{};
+};
+struct TestSpawnerSystem : System<TestSpawnerSystem>
+{
+	Query<TestIndex>* query{};
+	float interval = 0.01f;
+	float timer = 30.0f;
+	static_stack<Entity, 640> spawned{};
+
+	void OnRegistered() override
+	{
+		query = GetWorld().CreateQuery<TestIndex>({
+			[this](Entity entity)
+			{
+				auto index = GetWorld().GetComponent<TestIndex>(entity);
+				spawned[index.index] = entity;
+			},
+			[this](Entity entity)
+			{
+				auto index = GetWorld().GetComponent<TestIndex>(entity);
+				spawned[index.index] = 0;
+			} });
+	}
+
+	void Update(const GameTime& time)
+	{
+		if (timer > 0.0f) timer -= time.dt();
+
+		if (timer <= 0.0f)
+		{
+			for (int i = 0; i < 3; ++i)
+			{
+				auto search = std::ranges::find_if(spawned, [](auto e) { return e == 0; });
+				if (search != spawned.end())
+				{
+					timer += interval;
+
+					Entity entity = GetWorld().CreateEntity();
+					*search = entity;
+
+					ptrdiff_t index = std::distance(spawned.begin(), search);
+
+					Color colors[] = {
+						{0x18, 0x21, 0xfd, 0xff},
+						{0x50, 0x31, 0x97, 0xff},
+						{0xbf, 0x53, 0xc9, 0xff},
+						{0xe1, 0x7c, 0xb7, 0xff},
+						{0xef, 0xaa, 0xa5, 0xff},
+						{0xf6, 0xe0, 0xc8, 0xff},
+					};
+
+					float ratio = static_cast<float>(index) / spawned.capacity();
+
+					GetWorld().AddComponents(entity, Transform{ {8, 8} }, TestIndex{ static_cast<int>(index), 0.5f + ratio * math::Phi * 8.0f }, TestColor{ colors[index % 6] }, TestSize{ 25});
+				}
+			}
+		}
+		//auto testEntities = world.CreateEntities<36>();
+		//{
+		//	float sizes[3] = { 2, 3, 4 };
+		//	float radii[3] = { 2, 3, 4 };
+		//	int index = 0;
+		//	for (Entity entity : testEntities)
+		//	{
+		//		int groupIndex = index * 3 / static_cast<int>(testEntities.size());
+		//		world.AddComponents(entity,
+		//			Transform{}, TestIndex{ index, radii[groupIndex] }, TestColor{ colors[groupIndex] }, TestSize{ sizes[groupIndex] });
+		//		++index;
+		//	}
+		//}
+	}
+};
+
+
+struct TestSystem : System<TestSystem, TestIndex, Transform, TestSize, TestColor>
+{
+	float t = 0;
+	Query<TestIndex, TestSize>* query{};
+
+	void OnRegistered() override
+	{
+		query = GetWorld().CreateQuery<TestIndex, TestSize>({}, [](World& world, Entity a, Entity b)
+			{
+				auto& [sizeA] = world.GetComponent<TestSize>(a);
+				auto& [sizeB] = world.GetComponent<TestSize>(b);
+				return sizeA < sizeB;
+			});
+	}
+
+	void Update(const GameTime& time)
+	{
+		for (auto& entities = GetEntities(); Entity entity : entities)
+		{
+			auto [index, transform, size, color] = GetArchetype(entity);
+
+
+			float indexRatio = static_cast<float>(index.index) / entities.size();
+			index.time += time.dt() * indexRatio * math::Phi;
+			float radians = math::E * math::Phi * index.index + index.time + time.t();
+
+			Vec2 targetPosition = Vec2{ 8, 8 } + Vec2{ std::cos(radians), std::sin(radians) } *index.radius;
+
+			transform.position = vec2::Damp(transform.position, targetPosition, 5.0f, time.dt());
+		}
+
+		if (input::GetKeyDown(SDL_SCANCODE_L))
+		{
+			auto testSizes = query->GetComponentList<TestSize>();
+			auto last = std::ranges::upper_bound(testSizes, TestSize{ 2.9f }, [this](const TestSize& a, const TestSize& b) { return a.size < b.size; });
+			auto first = testSizes.begin();
+			std::accumulate(first, last, static_cast<int32_t>(std::distance(testSizes.begin(), last)), [this](int32_t index, const TestSize& size)
+				{
+					Entity spawned = query->GetEntityAtIndex(index);
+					//GetWorld().DestroyEntity(spawned);			  // investigate Destroy/DestroyImmediate, create DestroyTag, Reject<DestroyTag> outright?
+					GetWorld().AddComponent<Expiration>(spawned, {}); // works much more reliably, need to investigate updating query appropriately as 
+					return index + 1;
+				});
+		}
+	}
+
+	void Render(const DrawContext& ctx, const Camera& activeCamera)
+	{
+		for (auto& entities = GetEntities(); Entity entity : entities)
+		{
+			auto [index, transform, size, color] = GetArchetype(entity);
+
+			Vec2 screenPos = camera::WorldToScreen(activeCamera, transform.position);
+			Vec2 screenSize = vec2::One * size.size;
+
+			DrawRect r{ screenPos - screenSize / 2, screenSize };
+			draw::RectFill(ctx, r, color.color);
+		}
+	}
+};
+
 int main(int argc, char* argv[])
 {
 	stm_setup();
@@ -39,15 +189,15 @@ int main(int argc, char* argv[])
 	TTF_Font* ssvFont = TTF_OpenFont("assets/PressStart2P-Regular.ttf", 8);
 
 	random::GameRandGen rng(stm_now() | (stm_now() << 24));
-	
-	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, 0);
+
+	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1080, 1080, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
-	constexpr int canvasX = 256, canvasY = 144;
+	constexpr int canvasX = 256, canvasY = 256;
 	SDL_RenderSetLogicalSize(renderer, canvasX, canvasY);
 	Vec2 viewExtents{ static_cast<float>(canvasX), static_cast<float>(canvasY) };
 
-	InitDevConsole(debug::DevConsoleConfig{ 256 * 6, 144 * 6, debugFont, renderer });
+	InitDevConsole(debug::DevConsoleConfig{ canvasX * 6, canvasY * 6, debugFont, renderer });
 	debug::DevConsoleAddCommand("sreport", [] {PrintStringReport(StrId::QueryStringReport()); return 0; });
 
 	SpriteSheet sheet = sprite_sheet::Import("assets/spritesheet.tsj", renderer);
@@ -59,7 +209,8 @@ int main(int argc, char* argv[])
 	debug::DevConsoleAddCommand("ssv", [&ssv] { ssv.visible = !ssv.visible; return 0; });
 
 	world.RegisterComponents<
-		DestroyEntityTag, Expiration,
+		TestColor, TestSize, TestIndex,
+		Expiration,
 		Transform, Velocity,
 		GameInputGather, GameInput,
 		PlayerControl, PlayerShootControl,
@@ -71,7 +222,6 @@ int main(int argc, char* argv[])
 		PhysicsBody, Collider::Box, Collider::Circle, PhysicsNudge,
 		DebugMarker>();
 
-	auto destroyEntitySystem = DestroyEntitySystem::Register(world);
 	auto expirationSystem = EntityExpirationSystem::Register(world);
 	auto viewSystem = ViewSystem::Register(world);
 	auto gatherInputSystem = GatherInputSystem::Register(world);
@@ -87,11 +237,13 @@ int main(int argc, char* argv[])
 	auto debugMarkerSystem = ColliderDebugDrawSystem::Register(world);
 	auto physicsBodyVelocitySystem = PhysicsBodyVelocitySystem::Register(world);
 	auto spawnerSystem = SpawnerSystem::Register(world);
+	auto testSystem = TestSystem::Register(world);
+	auto testSpawnSystem = TestSpawnerSystem::Register(world);
 
 	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
 
 	physicsSystem->SetMap(map);
-	enemyFollowSystem->targetEntity = playerEntity;
+	//enemyFollowSystem->targetEntity = playerEntity;
 
 	debug::DevConsoleAddCommand("reload", [&]
 		{
@@ -103,36 +255,38 @@ int main(int argc, char* argv[])
 	world.AddComponents(cameraEntity,
 		Transform{},
 		CameraView{ viewExtents },
-		GameCameraControl{ map, playerEntity, {{-2, -0.75f}, {2, 0.75f}} });
+		GameCameraControl{ map, 0, {{-2, -0.75f}, {2, 0.75f}} });
 
-	world.AddComponents(mapEntity,
-		Transform{},
-		GameMapRender{ map });
 
-	world.AddComponents(playerEntity,
-		Transform{ {8, 5} },
-		GameInput{},
-		GameInputGather{},
-		PlayerControl{},
-		PlayerShootControl{ 0.15f },
-		Facing{ Direction::Right },
-		Velocity{},
-		FacingSprites{ 13, 11, 12 },
-		SpriteRender{ 10, SpriteFlipFlags::None, vec2::Half },
-		Collider::Box{ vec2::Zero, vec2::One * 0.45f },
-		PhysicsBody{},
-		DebugMarker{});
 
-	Entity enemyPrefab = world.CreateEntity();
-	world.AddComponents(enemyPrefab,
-		Prefab{},
-		Transform{},
-		Velocity{},
-		SpriteRender{ 26, SpriteFlipFlags::None, vec2::Half },
-		EnemyTag{},
-		PhysicsBody{},
-		PhysicsNudge{ 0.6f, 0.33f, 5.0f },
-		Collider::Box{ vec2::Zero, vec2::One * 0.45f });
+	//world.AddComponents(mapEntity,
+	//	Transform{},
+	//	GameMapRender{ map });
+
+	//world.AddComponents(playerEntity,
+	//	Transform{ {8, 5} },
+	//	GameInput{},
+	//	GameInputGather{},
+	//	PlayerControl{},
+	//	PlayerShootControl{ 0.15f },
+	//	Facing{ Direction::Right },
+	//	Velocity{},
+	//	FacingSprites{ 13, 11, 12 },
+	//	SpriteRender{ 10, SpriteFlipFlags::None, vec2::Half },
+	//	Collider::Box{ vec2::Zero, vec2::One * 0.45f },
+	//	PhysicsBody{},
+	//	DebugMarker{});
+
+	//Entity enemyPrefab = world.CreateEntity();
+	//world.AddComponents(enemyPrefab,
+	//	Prefab{},
+	//	Transform{},
+	//	Velocity{},
+	//	SpriteRender{ 26, SpriteFlipFlags::None, vec2::Half },
+	//	EnemyTag{},
+	//	PhysicsBody{},
+	//	PhysicsNudge{ 0.6f, 0.33f, 5.0f },
+	//	Collider::Box{ vec2::Zero, vec2::One * 0.45f });
 
 	auto findSafeSpot = [physicsSystem](const std::function<Vec2()>& gen, Vec2 halfSize) -> std::pair<bool, Vec2>
 	{
@@ -153,28 +307,32 @@ int main(int argc, char* argv[])
 		return Vec2{ rng.RangeF(bounds.Left(), bounds.Right()), rng.RangeF(bounds.Top(), bounds.Bottom()) };
 	};
 
-	constexpr int SPAWNER_COUNT = 2;
-	for (auto spawnerEntities = world.CreateEntities<SPAWNER_COUNT>(); Entity spawner : spawnerEntities)
-	{
-		if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
-		{
-			//world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, rng.RangeF(5.0f, 10.0f), rng.RangeF(1, 10), 6 });
-			world.AddComponents(spawner,
-				Transform{position},
-				Spawner{ enemyPrefab, 0.5f, 0.5f, 2 });
-		}
-	}
+	//constexpr int SPAWNER_COUNT = 5; int ct = 0;
+	//for (auto spawnerEntities = world.CreateEntities<SPAWNER_COUNT>(); Entity spawner : spawnerEntities)
+	//{
+	//	//if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
+	//	//{
+	//	//	//world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, rng.RangeF(5.0f, 10.0f), rng.RangeF(1, 10), 6 });
+	//	//	world.AddComponents(spawner,
+	//	//		Transform{position},
+	//	//		Spawner{ enemyPrefab, 0.5f, 0.5f, 4 });
+	//	//}
+	//	world.AddComponents(spawner,
+	//		Transform{ {3 + 1.2f * ct, 2 + 1.6f * ct} },
+	//		Spawner{ enemyPrefab, 3, 0, 2 });
+	//	++ct;
+	//}
 
 	constexpr int ENEMY_COUNT = 0;
 #if 1
-	for (int i = 0; i < ENEMY_COUNT; ++i)
-	{
-		Entity enemy = world.CloneEntity(enemyPrefab);
-		if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
-		{
-			world.GetComponent<Transform>(enemy).position = position;
-		}
-	}
+	//for (int i = 0; i < ENEMY_COUNT; ++i)
+	//{
+	//	Entity enemy = world.CloneEntity(enemyPrefab);
+	//	if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
+	//	{
+	//		world.GetComponent<Transform>(enemy).position = position;
+	//	}
+	//}
 #else
 	for (auto enemyEntities = world.CreateEntities<ENEMY_COUNT>(); Entity enemy : enemyEntities)
 	{
@@ -195,7 +353,7 @@ int main(int argc, char* argv[])
 	}
 #endif
 
-	cameraControlSystem->SnapFocusToFollow(cameraEntity);
+	//cameraControlSystem->SnapFocusToFollow(cameraEntity);
 
 	int targetFrames = 60;
 	double targetFrameTime = 1.0 / targetFrames;
@@ -290,7 +448,6 @@ int main(int argc, char* argv[])
 		GameTime gameTime(elapsedSec, deltaSec);
 
 		expirationSystem->Update(gameTime);
-		destroyEntitySystem->Update();
 		spawnerSystem->Update(gameTime);
 		gatherInputSystem->Update(gameTime);
 		playerControlSystem->Update(gameTime);
@@ -302,6 +459,8 @@ int main(int argc, char* argv[])
 		physicsSystem->Update(gameTime);
 		cameraControlSystem->Update(gameTime);
 		viewSystem->Update(gameTime);
+		testSpawnSystem->Update(gameTime);
+		testSystem->Update(gameTime);
 
 		SpriteSheetViewControl(ssv);
 
@@ -309,12 +468,13 @@ int main(int argc, char* argv[])
 		gameMapRenderSystem->RenderLayers(drawContext, std::array{ StrId("Background") });
 		spriteRenderSystem->Render(drawContext);
 		if (showColliders) debugMarkerSystem->DrawMarkers(drawContext);
+		testSystem->Render(drawContext, viewSystem->ActiveCamera());
 
 		SpriteSheetViewRender(drawContext, ssv);
 
 		if (showDebugWatch)
 		{
-			debug::DrawWatch(drawContext, Color{0, 255, 0, 255});
+			debug::DrawWatch(drawContext, Color{ 0, 255, 0, 255 });
 		}
 		debug::DrawConsole(drawContext, gameTime.dt());
 

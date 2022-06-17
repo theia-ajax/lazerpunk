@@ -4,11 +4,6 @@
 #include "ecs.h"
 #include "types.h"
 
-struct DestroyEntitySystem : System<DestroyEntitySystem, DestroyEntityTag>
-{
-	void Update();
-};
-
 struct EntityExpirationSystem : System<EntityExpirationSystem, Expiration>
 {
 	void Update(const GameTime& time);

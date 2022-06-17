@@ -18,7 +18,7 @@
 #include "types.h"
 
 #ifndef ENABLE_ECS_LOGGING
-#define ENABLE_ECS_LOGGING 1
+#define ENABLE_ECS_LOGGING 0
 #endif
 
 #if ENABLE_ECS_LOGGING
@@ -655,13 +655,8 @@ public:
 		return GetWorld().template GetComponents<Components...>(entity);
 	}
 
-	//auto GetComponentLists() // -> std::tuple<std::vector<Components*>...>
-	//{
-
-	//}
-
 	template <typename T>
-	auto GetComponentList() -> std::enable_if_t<not is_reject_component_v<T> and std::disjunction_v<std::is_same<T, Components>...>, std::vector<std::reference_wrapper<T>>&>
+	auto GetComponentList() const -> std::enable_if_t<not is_reject_component_v<T> and std::disjunction_v<std::is_same<T, Components>...>, const std::vector<std::reference_wrapper<T>>&>
 	{
 		return std::get<component_ref_vector_t<T>>(componentLists);
 	}
@@ -672,10 +667,8 @@ public:
 	}
 
 	void InsertLists(ptrdiff_t index, Entity entity) override;
-	
 	void RemoveLists(ptrdiff_t index) override;
 
-	component_ref_vector_reject_filter_t<Components...> componentLists;
 private:
 	template <typename T>
 	auto GetFirstListHelper() const
@@ -695,6 +688,8 @@ private:
 			return GetFirstListHelper<Head>();
 	}
 
+private:
+	component_ref_vector_reject_filter_t<Components...> componentLists;
 };
 
 class QueryManager
