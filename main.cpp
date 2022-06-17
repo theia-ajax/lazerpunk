@@ -52,7 +52,7 @@ struct TestSpawnerSystem : System<TestSpawnerSystem>
 {
 	Query<TestIndex>* query{};
 	float interval = 0.01f;
-	float timer = 30.0f;
+	float timer = 0.5f;
 	static_stack<Entity, 640> spawned{};
 
 	void OnRegistered() override
@@ -99,7 +99,7 @@ struct TestSpawnerSystem : System<TestSpawnerSystem>
 
 					float ratio = static_cast<float>(index) / spawned.capacity();
 
-					GetWorld().AddComponents(entity, Transform{ {8, 8} }, TestIndex{ static_cast<int>(index), 0.5f + ratio * math::Phi * 8.0f }, TestColor{ colors[index % 6] }, TestSize{ 25});
+					GetWorld().AddComponents(entity, Transform{ {8, 5} }, TestIndex{ static_cast<int>(index), 0.5f + ratio * math::Phi * 8.0f }, TestColor{ colors[index % 6] }, TestSize{ ratio * 4 + 1 });
 				}
 			}
 		}
@@ -146,7 +146,7 @@ struct TestSystem : System<TestSystem, TestIndex, Transform, TestSize, TestColor
 			index.time += time.dt() * indexRatio * math::Phi;
 			float radians = math::E * math::Phi * index.index + index.time + time.t();
 
-			Vec2 targetPosition = Vec2{ 8, 8 } + Vec2{ std::cos(radians), std::sin(radians) } *index.radius;
+			Vec2 targetPosition = Vec2{ 8, 5 } + Vec2{ std::cos(radians), std::sin(radians) } *index.radius;
 
 			transform.position = vec2::Damp(transform.position, targetPosition, 5.0f, time.dt());
 		}
@@ -154,9 +154,13 @@ struct TestSystem : System<TestSystem, TestIndex, Transform, TestSize, TestColor
 		if (input::GetKeyDown(SDL_SCANCODE_L))
 		{
 			auto testSizes = query->GetComponentList<TestSize>();
+			bool isSorted = std::ranges::is_sorted(testSizes, [](const TestSize& a, const TestSize& b) { return a.size < b.size;  });
+			debug::Log("query sorted: {}", isSorted);
 			auto last = std::ranges::upper_bound(testSizes, TestSize{ 2.9f }, [this](const TestSize& a, const TestSize& b) { return a.size < b.size; });
 			auto first = testSizes.begin();
-			std::accumulate(first, last, static_cast<int32_t>(std::distance(testSizes.begin(), last)), [this](int32_t index, const TestSize& size)
+			int32_t count = static_cast<int32_t>(std::distance(testSizes.begin(), last));
+			debug::Log("query matched {} entities", count);
+			std::accumulate(first, last, count, [this](int32_t index, const TestSize& size)
 				{
 					Entity spawned = query->GetEntityAtIndex(index);
 					//GetWorld().DestroyEntity(spawned);			  // investigate Destroy/DestroyImmediate, create DestroyTag, Reject<DestroyTag> outright?
@@ -190,10 +194,10 @@ int main(int argc, char* argv[])
 
 	random::GameRandGen rng(stm_now() | (stm_now() << 24));
 
-	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1080, 1080, 0);
+	SDL_Window* window = SDL_CreateWindow("Lazer Punk", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, 0);
 	SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
-	constexpr int canvasX = 256, canvasY = 256;
+	constexpr int canvasX = 256, canvasY = 144;
 	SDL_RenderSetLogicalSize(renderer, canvasX, canvasY);
 	Vec2 viewExtents{ static_cast<float>(canvasX), static_cast<float>(canvasY) };
 
