@@ -35,6 +35,7 @@ namespace ecs { template <typename... Args> void Log(std::string_view fmt, Args&
 class World;
 using Entity = int32_t;
 constexpr Entity kMaxEntities = 4096;
+constexpr Entity kEntityArraySize = kMaxEntities + 1;
 constexpr Entity kInvalidEntity = 0;
 
 using ComponentType = uint8_t;
@@ -251,7 +252,7 @@ public:
 private:
 	std::stack<Entity> availableEntities{};
 	std::set<Entity> activeEntities;
-	std::array<Signature, kMaxEntities + 1> signatures{};
+	std::array<Signature, kEntityArraySize> signatures{};
 	World& world;
 };
 
@@ -356,7 +357,7 @@ public:
 	}
 
 private:
-	std::array<T, kMaxEntities + 1> componentArray{};
+	std::array<T, kEntityArraySize> componentArray{};
 	std::unordered_map<Entity, size_t> entityToIndexMap{};
 	std::unordered_map<size_t, Entity> indexToEntityMap{};
 	size_t size = 1;
@@ -575,21 +576,19 @@ public:
 
 	virtual void InsertLists(ptrdiff_t index, Entity entity) { ASSERT(false && "SHOULDNT HAPPEN"); }
 	virtual void RemoveLists(ptrdiff_t index) { ASSERT(false && "SHOULDNT HAPPEN"); }
-	virtual void RebuildComponentLists() { ASSERT(false); }
+	virtual void RefreshComponentReferences() { ASSERT(false); }
 
 private:
 	void Insert(ptrdiff_t index, Entity entity)
 	{
 		entities.insert(entities.begin() + index, entity);
-		//InsertLists(index, entity);
-		RebuildComponentLists();
+		InsertLists(index, entity);
 	}
 
 	void Remove(ptrdiff_t index)
 	{
 		entities.erase(entities.begin() + index);
-		//RemoveLists(index);
-		RebuildComponentLists();
+		RemoveLists(index);
 	}
 
 public:
@@ -705,7 +704,7 @@ public:
 	}
 
 	template <typename T>
-	auto GetComponentList() const -> std::enable_if_t<not is_reject_component_v<T> and std::disjunction_v<std::is_same<T, Components>...>, const std::vector<std::reference_wrapper<T>>&>
+	auto GetComponentList() const -> std::enable_if_t<not is_reject_component_v<T> and std::disjunction_v<std::is_same<T, Components>...>, const component_ref_vector_t<T>&>
 	{
 		return std::get<component_ref_vector_t<T>>(componentLists);
 	}
@@ -732,7 +731,7 @@ public:
 
 	void InsertLists(ptrdiff_t index, Entity entity) override;
 	void RemoveLists(ptrdiff_t index) override;
-	void RebuildComponentLists() override;
+	void RefreshComponentReferences() override;
 
 private:
 	template <typename T>
@@ -741,7 +740,7 @@ private:
 		if constexpr (is_reject_component_v<T>)
 			return std::tuple<>();
 		else
-			return std::tuple<std::vector<std::reference_wrapper<T>>>(GetComponentList<T>());
+			return std::tuple<component_ref_vector_t<T>>(GetComponentList<T>());
 	}
 
 	template <typename Head, typename... Tail>
@@ -767,6 +766,8 @@ public:
 	template <class... Components> Query<Components...>* GetQueryById(QueryId queryId);
 
 	void OnEntitySignatureChanged(Entity entity, Signature newSignature, Signature oldSignature);
+	void BeginComponentRefUpdates();
+	void ApplyComponentRefUpdates();
 private:
 	World& world;
 
@@ -774,6 +775,8 @@ private:
 	std::set<Signature> signatures;
 	std::unordered_map<QueryId, std::unique_ptr<QueryBase>> queries;
 	std::unordered_map<Signature, std::vector<QueryId>> queriesBySignature;
+	bool areComponentRefsUpdating = false;
+	std::set<QueryId> pendingRefUpdateQueries;
 };
 
 enum class SystemFlags
@@ -961,9 +964,12 @@ public:
 	void DestroyEntity(Entity entity)
 	{
 		ecs::Log("[World] DestroyEntity {}", entity);
+
+		queryManager.BeginComponentRefUpdates();
 		queryManager.OnEntitySignatureChanged(entity, Signature{}, entityManager.GetSignature(entity));
-		entityManager.DestroyEntity(entity);
 		componentManager.OnEntityDestroyed(entity);
+		entityManager.DestroyEntity(entity);
+		queryManager.ApplyComponentRefUpdates();
 	}
 
 	template <typename T>
@@ -1031,7 +1037,9 @@ public:
 		signature.require.set(componentManager.GetComponentType<T>(), false);
 		entityManager.SetSignature(entity, signature);
 
+		queryManager.BeginComponentRefUpdates();
 		queryManager.OnEntitySignatureChanged(entity, signature, oldSignature);
+		queryManager.ApplyComponentRefUpdates();
 	}
 
 	template <typename T>
@@ -1261,6 +1269,9 @@ auto System<T, Components...>::GetSystemQuery()
 	return systemQuery;
 }
 
+// Expands out to
+// { f(0), f(1), f(2) ... f(n) }
+// if called with an index sequence of size N
 template <class F, class... Args>
 void for_each_argument(F f, Args&&... args) {
 	(void)std::initializer_list<int>{(f(std::forward<Args>(args)), 0)...};
@@ -1276,62 +1287,14 @@ void tuple_vector_apply(F&& f, TVec& tupleVec, std::index_sequence<TIdxs...>)
 		}, std::integral_constant<std::size_t, TIdxs>{}...);
 }
 
-template <typename TVec, typename TElement, std::size_t... TIdxs>
-void insert_tuple_vector(TVec& tupleVec, ptrdiff_t index, TElement tupleElement, std::index_sequence<TIdxs...>)
-{
-	for_each_argument([&](auto idx)
-		{
-			auto& idxVec = std::get<idx>(tupleVec);
-			auto insertAt = idxVec.begin() + index;
-			auto& idxElement = std::get<idx>(tupleElement);
-			idxVec.insert(insertAt, idxElement);
-		}, std::integral_constant<std::size_t, TIdxs>{}...);
-}
-
-template <typename TVec, typename TElement, std::size_t... TIdxs>
-void push_back_tuple_vector(TVec& tupleVec, TElement tupleElement, std::index_sequence<TIdxs...>)
-{
-	for_each_argument([&](auto idx)
-		{
-			auto& idxVec = std::get<idx>(tupleVec);
-			auto& idxElement = std::get<idx>(tupleElement);
-			idxVec.push_back(idxElement);
-		}, std::integral_constant<std::size_t, TIdxs>{}...);
-}
-
-template <typename TVec, std::size_t... TIdxs>
-void erase_tuple_vector(TVec& tupleVec, ptrdiff_t index, std::index_sequence<TIdxs...>)
-{
-	for_each_argument([&](auto idx)
-		{
-			auto& idxVec = std::get<idx>(tupleVec);
-			auto eraseAt = idxVec.begin() + index;
-			idxVec.erase(eraseAt);
-		}, std::integral_constant<std::size_t, TIdxs>{}...);
-}
-
-template <typename TVec, std::size_t... TIdxs>
-void clear_tuple_vector(TVec& tupleVec, std::index_sequence<TIdxs...>)
-{
-	for_each_argument([&](auto idx)
-		{
-			auto& idxVec = std::get<idx>(tupleVec);
-			idxVec.clear();
-		}, std::integral_constant<std::size_t, TIdxs>{}...);
-}
-
 template <typename... Components>
 void Query<Components...>::InsertLists(ptrdiff_t index, Entity entity)
 {
-	constexpr size_t tupleSize = std::tuple_size_v<component_reject_filter_t<Components...>>;
-	if constexpr (tupleSize > 0)
+	if constexpr (component_reject_filter_size_v<Components...> > 0)
 	{
+		auto sequence = std::make_index_sequence<component_reject_filter_size_v<Components...>>();
 		auto comps = GetArchetype(entity);
-		static_assert(tupleSize > 0);
-		insert_tuple_vector(componentLists,
-			index,
-			comps,
-			std::make_index_sequence<tupleSize>());
+		tuple_vector_apply([&](auto idx, auto& idxVec) { idxVec.insert(idxVec.begin() + index, std::get<idx>(comps)); }, componentLists, sequence);
 	}
 }
 
@@ -1340,19 +1303,19 @@ void Query<Components...>::RemoveLists(ptrdiff_t index)
 {
 	auto sequence = std::make_index_sequence<component_reject_filter_size_v<Components...>>();
 	tuple_vector_apply([&](auto idx, auto& idxVec) { idxVec.erase(idxVec.begin() + index); }, componentLists, sequence);
-	//erase_tuple_vector(componentLists, index, std::make_index_sequence<std::tuple_size_v<decltype(componentLists)>>());
 }
 
 template <typename ... Components>
-void Query<Components...>::RebuildComponentLists()
+void Query<Components...>::RefreshComponentReferences()
 {
 	auto sequence = std::make_index_sequence<component_reject_filter_size_v<Components...>>();
-	tuple_vector_apply([&](auto idx, auto& idxVec) { idxVec.clear(); }, componentLists, sequence);
 
+	int index = 0;
 	for (auto entity : entities)
 	{
 		auto components = GetArchetype(entity);
-		tuple_vector_apply([&](auto idx, auto& idxVec) { idxVec.push_back(std::get<idx>(components)); }, componentLists, sequence);
+		tuple_vector_apply([&](auto idx, auto& idxVec) { idxVec[index] = std::get<idx>(components); }, componentLists, sequence);
+		index++;
 	}
 }
 
@@ -1433,8 +1396,36 @@ inline void QueryManager::OnEntitySignatureChanged(Entity entity, Signature newS
 #endif
 
 				query->RemoveEntity(entity);
+
+				if (areComponentRefsUpdating)
+					pendingRefUpdateQueries.insert(queryId);
 			}
 
 		}
+	}
+}
+
+inline void QueryManager::BeginComponentRefUpdates()
+{
+	ASSERT(!areComponentRefsUpdating && "Begin/Apply mismatch.");
+	areComponentRefsUpdating = true;
+}
+
+inline void QueryManager::ApplyComponentRefUpdates()
+{
+	ASSERT(areComponentRefsUpdating && "Begin/Apply mismatch.");
+	areComponentRefsUpdating = false;
+
+	// Whenever a component itself is potentially removed, existing references to other components in the same component array may have shifted.
+	// This is because the component array is kept compressed so when one is removed the component at the end is swapped into it's place.
+	// This means that cases where the component references on queries may shift calls to OnEntitySignatureChanged should be surrounded with
+	// calls to BeginComponentRefUpdates and then ApplyComponentRefUpdates so that queries that remove entities during the signature change
+	// properly update the references on the query.
+	// Because a Reject<T> component would potentially remove an entity from a query without the underlying references being changed it's still necessary to allow
+	// entity removal from queries during signature changes that are purely additive like in AddComponent but not require that entity references get updated since nothing would change.
+	for (QueryId queryId : pendingRefUpdateQueries)
+	{
+		QueryBase* query = GetQueryUntypedById(queryId);
+		query->RefreshComponentReferences();
 	}
 }

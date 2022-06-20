@@ -252,8 +252,8 @@ void SpawnerSystem::Update(const GameTime& time)
 
 		const std::vector<Entity>& entities = GetEntities();
 
-		for (Entity entity : entities)
-		{
+		Entity entity = entities[s_kill % entities.size()];
+
 			auto first = std::ranges::lower_bound(sources, SpawnSource{ entity }, [](const SpawnSource& a, const SpawnSource& b) { return a.source < b.source; });
 			auto last = std::ranges::upper_bound(sources, SpawnSource{ entity }, [](const SpawnSource& a, const SpawnSource& b) { return a.source < b.source; });
 			static_cast<void>(std::accumulate(first, last, static_cast<int32_t>(first - sources.begin()),
@@ -264,6 +264,5 @@ void SpawnerSystem::Update(const GameTime& time)
 					GetWorld().AddComponent<Expiration>(spawned, {}); // works much more reliably, need to investigate updating query appropriately as 
 					return index + 1;
 				}));
-		}
 	}
 }
