@@ -172,17 +172,17 @@ struct TestSpawnerSystem : System<TestSpawnerSystem>
 			{
 				auto index = GetWorld().GetComponent<TestIndex>(entity);
 				spawned[index.index] = entity;
-				LogIterator(spawned.begin(), spawned.end(), "static_stack", "Spawned");
+				//LogIterator(spawned.begin(), spawned.end(), "static_stack", "Spawned");
 				const auto& list = query->GetComponentList<TestIndex>();
-				LogIterator(list.begin(), list.end(), "ComponentList", "Query");
+				//LogIterator(list.begin(), list.end(), "ComponentList", "Query");
 			},
 			[this](Entity entity)
 			{
 				auto index = GetWorld().GetComponent<TestIndex>(entity);
 				spawned[index.index] = 0;
-				LogIterator(spawned.begin(), spawned.end(), "static_stack", "Spawned");
+				//LogIterator(spawned.begin(), spawned.end(), "static_stack", "Spawned");
 				const auto& list = query->GetComponentList<TestIndex>();
-				LogIterator(list.begin(), list.end(), "ComponentList", "Query");
+				//LogIterator(list.begin(), list.end(), "ComponentList", "Query");
 			} }, [](World& world, Entity a, Entity b)
 			{
 				auto& idxA = world.GetComponent<TestIndex>(a);
@@ -298,13 +298,13 @@ int main(int argc, char* argv[])
 	auto debugMarkerSystem = ColliderDebugDrawSystem::Register(world);
 	auto physicsBodyVelocitySystem = PhysicsBodyVelocitySystem::Register(world);
 	auto spawnerSystem = SpawnerSystem::Register(world);
-	auto testSystem = TestSystem::Register(world);
-	auto testSpawnSystem = TestSpawnerSystem::Register(world);
+	//auto testSystem = TestSystem::Register(world);
+	//auto testSpawnSystem = TestSpawnerSystem::Register(world);
 
 	auto [cameraEntity, mapEntity, playerEntity] = world.CreateEntities<3>();
 
 	physicsSystem->SetMap(map);
-	//enemyFollowSystem->targetEntity = playerEntity;
+	enemyFollowSystem->targetEntity = playerEntity;
 
 	debug::DevConsoleAddCommand("reload", [&]
 		{
@@ -320,34 +320,34 @@ int main(int argc, char* argv[])
 
 
 
-	//world.AddComponents(mapEntity,
-	//	Transform{},
-	//	GameMapRender{ map });
+	world.AddComponents(mapEntity,
+		Transform{},
+		GameMapRender{ map });
 
-	//world.AddComponents(playerEntity,
-	//	Transform{ {8, 5} },
-	//	GameInput{},
-	//	GameInputGather{},
-	//	PlayerControl{},
-	//	PlayerShootControl{ 0.15f },
-	//	Facing{ Direction::Right },
-	//	Velocity{},
-	//	FacingSprites{ 13, 11, 12 },
-	//	SpriteRender{ 10, SpriteFlipFlags::None, vec2::Half },
-	//	Collider::Box{ vec2::Zero, vec2::One * 0.45f },
-	//	PhysicsBody{},
-	//	DebugMarker{});
+	world.AddComponents(playerEntity,
+		Transform{ {8, 5} },
+		GameInput{},
+		GameInputGather{},
+		PlayerControl{},
+		PlayerShootControl{ 0.15f },
+		Facing{ Direction::Right },
+		Velocity{},
+		FacingSprites{ 13, 11, 12 },
+		SpriteRender{ 10, SpriteFlipFlags::None, vec2::Half },
+		Collider::Box{ vec2::Zero, vec2::One * 0.45f },
+		PhysicsBody{},
+		DebugMarker{});
 
-	//Entity enemyPrefab = world.CreateEntity();
-	//world.AddComponents(enemyPrefab,
-	//	Prefab{},
-	//	Transform{},
-	//	Velocity{},
-	//	SpriteRender{ 26, SpriteFlipFlags::None, vec2::Half },
-	//	EnemyTag{},
-	//	PhysicsBody{},
-	//	PhysicsNudge{ 0.6f, 0.33f, 5.0f },
-	//	Collider::Box{ vec2::Zero, vec2::One * 0.45f });
+	Entity enemyPrefab = world.CreateEntity();
+	world.AddComponents(enemyPrefab,
+		Prefab{},
+		Transform{},
+		Velocity{},
+		SpriteRender{ 26, SpriteFlipFlags::None, vec2::Half },
+		EnemyTag{},
+		PhysicsBody{},
+		PhysicsNudge{ 0.6f, 0.33f, 5.0f },
+		Collider::Box{ vec2::Zero, vec2::One * 0.45f });
 
 	auto findSafeSpot = [physicsSystem](const std::function<Vec2()>& gen, Vec2 halfSize) -> std::pair<bool, Vec2>
 	{
@@ -368,21 +368,21 @@ int main(int argc, char* argv[])
 		return Vec2{ rng.RangeF(bounds.Left(), bounds.Right()), rng.RangeF(bounds.Top(), bounds.Bottom()) };
 	};
 
-	//constexpr int SPAWNER_COUNT = 5; int ct = 0;
-	//for (auto spawnerEntities = world.CreateEntities<SPAWNER_COUNT>(); Entity spawner : spawnerEntities)
-	//{
-	//	//if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
-	//	//{
-	//	//	//world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, rng.RangeF(5.0f, 10.0f), rng.RangeF(1, 10), 6 });
-	//	//	world.AddComponents(spawner,
-	//	//		Transform{position},
-	//	//		Spawner{ enemyPrefab, 0.5f, 0.5f, 4 });
-	//	//}
-	//	world.AddComponents(spawner,
-	//		Transform{ {3 + 1.2f * ct, 2 + 1.6f * ct} },
-	//		Spawner{ enemyPrefab, 3, 0, 2 });
-	//	++ct;
-	//}
+	constexpr int SPAWNER_COUNT = 5; int ct = 0;
+	for (auto spawnerEntities = world.CreateEntities<SPAWNER_COUNT>(); Entity spawner : spawnerEntities)
+	{
+		//if (auto [found, position] = findSafeSpot(randomMapPosition, vec2::Half); found)
+		//{
+		//	//world.AddComponents(spawner, Transform{position}, Spawner{ enemyPrefab, rng.RangeF(5.0f, 10.0f), rng.RangeF(1, 10), 6 });
+		//	world.AddComponents(spawner,
+		//		Transform{position},
+		//		Spawner{ enemyPrefab, 0.5f, 0.5f, 4 });
+		//}
+		world.AddComponents(spawner,
+			Transform{ {3 + 1.2f * ct, 2 + 1.6f * ct} },
+			Spawner{ enemyPrefab, 3, 0, 2 });
+		++ct;
+	}
 
 	constexpr int ENEMY_COUNT = 0;
 #if 1
@@ -414,7 +414,7 @@ int main(int argc, char* argv[])
 	}
 #endif
 
-	//cameraControlSystem->SnapFocusToFollow(cameraEntity);
+	cameraControlSystem->SnapFocusToFollow(cameraEntity);
 
 	int targetFrames = 60;
 	double targetFrameTime = 1.0 / targetFrames;
@@ -520,8 +520,8 @@ int main(int argc, char* argv[])
 		physicsSystem->Update(gameTime);
 		cameraControlSystem->Update(gameTime);
 		viewSystem->Update(gameTime);
-		testSpawnSystem->Update(gameTime);
-		testSystem->Update(gameTime);
+		//testSpawnSystem->Update(gameTime);
+		//testSystem->Update(gameTime);
 
 		SpriteSheetViewControl(ssv);
 
@@ -529,7 +529,7 @@ int main(int argc, char* argv[])
 		gameMapRenderSystem->RenderLayers(drawContext, std::array{ StrId("Background") });
 		spriteRenderSystem->Render(drawContext);
 		if (showColliders) debugMarkerSystem->DrawMarkers(drawContext);
-		testSystem->Render(drawContext, viewSystem->ActiveCamera());
+		//testSystem->Render(drawContext, viewSystem->ActiveCamera());
 
 		SpriteSheetViewRender(drawContext, ssv);
 

@@ -18,7 +18,7 @@
 #include "types.h"
 
 #ifndef ENABLE_ECS_LOGGING
-#define ENABLE_ECS_LOGGING 1
+#define ENABLE_ECS_LOGGING 0
 #endif
 
 #if ENABLE_ECS_LOGGING
@@ -588,8 +588,8 @@ private:
 	void Remove(ptrdiff_t index)
 	{
 		entities.erase(entities.begin() + index);
-		RemoveLists(index);
-		//RebuildComponentLists();
+		//RemoveLists(index);
+		RebuildComponentLists();
 	}
 
 public:
@@ -1338,7 +1338,9 @@ void Query<Components...>::InsertLists(ptrdiff_t index, Entity entity)
 template <typename... Components>
 void Query<Components...>::RemoveLists(ptrdiff_t index)
 {
-	erase_tuple_vector(componentLists, index, std::make_index_sequence<std::tuple_size_v<decltype(componentLists)>>());
+	auto sequence = std::make_index_sequence<component_reject_filter_size_v<Components...>>();
+	tuple_vector_apply([&](auto idx, auto& idxVec) { idxVec.erase(idxVec.begin() + index); }, componentLists, sequence);
+	//erase_tuple_vector(componentLists, index, std::make_index_sequence<std::tuple_size_v<decltype(componentLists)>>());
 }
 
 template <typename ... Components>
