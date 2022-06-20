@@ -41,10 +41,15 @@ constexpr Entity kInvalidEntity = 0;
 using ComponentType = uint8_t;
 constexpr ComponentType kMaxComponents = 64;
 
+// Built in components
+///////////////////////////////////////////////////
 struct Prefab {};
 
+// Reject<Component> to ignore entities containing that component
+// e.g. Reject<Prefab> is very common (and built-in to all systems) as prefabs are intended to be cloned but not actually a part of the simulation
 template <typename T>
 struct Reject { using Component = T; };
+///////////////////////////////////////////////////
 
 template <class T, template <class...> class Template>
 struct is_specialization : std::false_type {};
@@ -79,6 +84,7 @@ struct component_reject_filter<T, Ts...>
 	using type = decltype(std::tuple_cat(component_reject_filter<T>::type(), component_reject_filter<Ts...>::type()));
 };
 
+// component_reject_filter_t<Reject<Prefab>, Transform, Reject<PlayerTag>, Size, Color> = std::tuple<Transform, Size, Color>
 template <typename... T>
 using component_reject_filter_t = typename component_reject_filter<T...>::type;
 
@@ -112,10 +118,15 @@ struct component_ref_vector_reject_filter<T, Ts...>
 	using type = decltype(std::tuple_cat(component_ref_vector_reject_filter<T>::type(), component_ref_vector_reject_filter<Ts...>::type()));
 };
 
+// vector of references to all component types specified by T except Reject<Component>s
+// component_ref_vector_reject_filter_t<Reject<Prefab>, Transform, Size> = std::tuple<std::vector<Transform&>, std::vector<Size&>>
+// Note that the references are actually std::reference_wrapper<T> since raw references can't be used on vector but they function exactly the same as references
 template <typename... T>
 using component_ref_vector_reject_filter_t = typename component_ref_vector_reject_filter<T...>::type;
 
-// Signatures represent which 
+// Signatures represent which components are required and which should be rejected.
+// Each layer of the signature is a bit array of kMaxComponents in size.
+// hashing/comparison operator are implemented to make usage of signatures in sets/maps valid
 struct Signature
 {
 	using Layer = bitfield<kMaxComponents>;
@@ -541,6 +552,7 @@ static constexpr bool DefaultQuerySort(const World& world, Entity a, Entity b) {
 class QueryBase  // NOLINT(cppcoreguidelines-special-member-functions)
 {
 public:
+	virtual ~QueryBase() = default;
 	using SortPredicate = std::function<bool(World&, Entity, Entity)>;
 
 	QueryBase() = delete;
@@ -578,18 +590,7 @@ public:
 	virtual void RemoveLists(ptrdiff_t index) { ASSERT(false && "SHOULDNT HAPPEN"); }
 	virtual void RefreshComponentReferences() { ASSERT(false); }
 
-private:
-	void Insert(ptrdiff_t index, Entity entity)
-	{
-		entities.insert(entities.begin() + index, entity);
-		InsertLists(index, entity);
-	}
 
-	void Remove(ptrdiff_t index)
-	{
-		entities.erase(entities.begin() + index);
-		RemoveLists(index);
-	}
 
 public:
 	void AddEntity(Entity entity)
@@ -598,7 +599,6 @@ public:
 		auto index = std::distance(entities.begin(), insertAt);
 		ecs::Log("Query {} Add Entity {} at index {}", queryId, entity, index);
 		Insert(index, entity);
-		LogQuery();
 		OnEntityMatch(entity);
 	}
 
@@ -608,7 +608,6 @@ public:
 		auto index = std::distance(entities.begin(), eraseAt);
 		ecs::Log("Query {} Remove Entity {} from index {}", queryId, entity, index);
 		Remove(index);
-		LogQuery();
 		OnEntityUnmatch(entity);
 	}
 
@@ -626,46 +625,21 @@ public:
 		return entities[index];
 	}
 
-#if ENABLE_ECS_LOGGING
-	inline static std::set<QueryId> s_whitelist = { 20 };
-	inline static std::set<QueryId> s_blacklist = {};
-
-	void LogQuery()
-	{
-		if (!s_whitelist.empty() && !s_whitelist.contains(queryId))
-			return;
-
-		if (s_blacklist.contains(queryId))
-			return;
-
-		ecs::Log("Query {}", queryId);
-		LogSignature(*world, signature);
-
-		std::string entListStr;
-		entListStr.reserve(128);
-
-		for (size_t i = 0; i < entities.size(); ++i)
-		{
-			entListStr += std::to_string(entities[i]);
-			if (i < entities.size() - 1)
-				entListStr += ", ";
-		}
-
-		ecs::Log("  Entities [{}]: {}", entities.size(), entListStr);
-	}
-#else
-	void LogQuery() {}
-#endif
-
 	SortPredicate GetSortPredicate() { return sortPredicate; }
 	std::function<bool(Entity, Entity)> GetPredicate() const { return [this](Entity a, Entity b) { return sortPredicate(GetWorld(), a, b); }; }
 
-protected:
-	QueryId queryId;
-	std::vector<Entity> entities;
-	Signature signature;
-	QueryCallbacks callbacks;
-	SortPredicate sortPredicate;
+private:
+	void Insert(ptrdiff_t index, Entity entity)
+	{
+		entities.insert(entities.begin() + index, entity);
+		InsertLists(index, entity);
+	}
+
+	void Remove(ptrdiff_t index)
+	{
+		entities.erase(entities.begin() + index);
+		RemoveLists(index);
+	}
 
 	struct SortCaller
 	{
@@ -674,8 +648,13 @@ protected:
 		SortPredicate pred;
 		World& world;
 	};
-	bool SortPredicateForward(Entity a, Entity b) const { return sortPredicate(*world, a, b); }
 
+protected:
+	QueryId queryId;
+	std::vector<Entity> entities;
+	Signature signature;
+	QueryCallbacks callbacks;
+	SortPredicate sortPredicate;
 private:
 	World* world;
 };
@@ -687,8 +666,6 @@ template <typename... Components>
 class Query final : public QueryBase
 {
 public:
-	using TypeSignature = component_reject_filter_t<Components...>;
-
 	Query() = delete;
 	Query(const Query& other) = delete;
 	Query(Query&& other) = delete;
