@@ -18,7 +18,7 @@
 #include "types.h"
 
 #ifndef ENABLE_ECS_LOGGING
-#define ENABLE_ECS_LOGGING 0
+#define ENABLE_ECS_LOGGING 1
 #endif
 
 #if ENABLE_ECS_LOGGING
@@ -80,6 +80,12 @@ struct component_reject_filter<T, Ts...>
 
 template <typename... T>
 using component_reject_filter_t = typename component_reject_filter<T...>::type;
+
+template <typename... T>
+struct component_reject_filter_size : std::tuple_size<component_reject_filter_t<T...>> {};
+
+template <typename... T>
+inline constexpr size_t component_reject_filter_size_v = component_reject_filter_size<T...>::value;
 
 template <typename T>
 using component_ref_vector_t = std::vector<std::reference_wrapper<T>>;
@@ -159,7 +165,7 @@ struct std::formatter<Signature> : std::formatter<std::string>
 	}
 };
 
-void LogSignature(const World& world, const char* label, Signature signature);
+void LogSignature(const World& world, Signature signature);
 void LogCompareSignatures(const World& world, const char* label1, Signature signature1, const char* label2, Signature signature2);
 
 // Tracks available entity indices and signatures of active entities
@@ -227,9 +233,9 @@ public:
 
 	constexpr const std::set<Entity>& GetActiveEntities() const { return activeEntities; }
 
-	void GetEntitiesMatchingSignature(Signature signature, std::vector<Entity>& entities) const
+	std::vector<Entity> GetEntitiesMatchingSignature(Signature signature) const
 	{
-		entities.clear();
+		std::vector<Entity> entities;
 		for (Entity entity : activeEntities)
 		{
 			if (Signature entitySignature = GetSignature(entity); signature.Matches(entitySignature))
@@ -239,6 +245,7 @@ public:
 				entities.emplace_back(entity);
 			}
 		}
+		return entities;
 	}
 
 private:
@@ -557,33 +564,42 @@ public:
 	void InitializeEntityList(const EntityManager& entityManager)
 	{
 		ASSERT(entities.empty() && "Query already contained entities before initializing entity list");
-		entityManager.GetEntitiesMatchingSignature(signature, entities);
+		for (std::vector<Entity> existingEntities = entityManager.GetEntitiesMatchingSignature(signature); Entity entity : existingEntities)
+		{
+			AddEntity(entity);
+		}
+
 		if (!entities.empty())
 			ecs::Log("Initialized query and added {} entities to it.", entities.size());
-		for (Entity addedEntity : entities)
-			OnEntityMatch(addedEntity);
 	}
 
-	virtual void InsertLists(ptrdiff_t index, Entity entity) {}
-	virtual void RemoveLists(ptrdiff_t index) {}
+	virtual void InsertLists(ptrdiff_t index, Entity entity) { ASSERT(false && "SHOULDNT HAPPEN"); }
+	virtual void RemoveLists(ptrdiff_t index) { ASSERT(false && "SHOULDNT HAPPEN"); }
+	virtual void RebuildComponentLists() { ASSERT(false); }
 
+private:
 	void Insert(ptrdiff_t index, Entity entity)
 	{
 		entities.insert(entities.begin() + index, entity);
-		InsertLists(index, entity);
+		//InsertLists(index, entity);
+		RebuildComponentLists();
 	}
 
 	void Remove(ptrdiff_t index)
 	{
 		entities.erase(entities.begin() + index);
 		RemoveLists(index);
+		//RebuildComponentLists();
 	}
 
+public:
 	void AddEntity(Entity entity)
 	{
-		auto insertAt = std::ranges::upper_bound(entities, entity, SortCaller(sortPredicate, *world));
+		auto insertAt = std::ranges::lower_bound(entities, entity, SortCaller(sortPredicate, *world));
 		auto index = std::distance(entities.begin(), insertAt);
+		ecs::Log("Query {} Add Entity {} at index {}", queryId, entity, index);
 		Insert(index, entity);
+		LogQuery();
 		OnEntityMatch(entity);
 	}
 
@@ -591,7 +607,9 @@ public:
 	{
 		auto eraseAt = std::ranges::lower_bound(entities, entity, SortCaller(sortPredicate, *world));
 		auto index = std::distance(entities.begin(), eraseAt);
+		ecs::Log("Query {} Remove Entity {} from index {}", queryId, entity, index);
 		Remove(index);
+		LogQuery();
 		OnEntityUnmatch(entity);
 	}
 
@@ -608,6 +626,37 @@ public:
 		ASSERT(index >= 0 && index < static_cast<int32_t>(entities.size()) && "Index out of query range.");
 		return entities[index];
 	}
+
+#if ENABLE_ECS_LOGGING
+	inline static std::set<QueryId> s_whitelist = { 20 };
+	inline static std::set<QueryId> s_blacklist = {};
+
+	void LogQuery()
+	{
+		if (!s_whitelist.empty() && !s_whitelist.contains(queryId))
+			return;
+
+		if (s_blacklist.contains(queryId))
+			return;
+
+		ecs::Log("Query {}", queryId);
+		LogSignature(*world, signature);
+
+		std::string entListStr;
+		entListStr.reserve(128);
+
+		for (size_t i = 0; i < entities.size(); ++i)
+		{
+			entListStr += std::to_string(entities[i]);
+			if (i < entities.size() - 1)
+				entListStr += ", ";
+		}
+
+		ecs::Log("  Entities [{}]: {}", entities.size(), entListStr);
+	}
+#else
+	void LogQuery() {}
+#endif
 
 	SortPredicate GetSortPredicate() { return sortPredicate; }
 	std::function<bool(Entity, Entity)> GetPredicate() const { return [this](Entity a, Entity b) { return sortPredicate(GetWorld(), a, b); }; }
@@ -666,8 +715,24 @@ public:
 		return GetComponentListsHelper<Components...>();
 	}
 
+	template <typename T>
+	void LogComponentList(std::function<std::string(const T&)> componentToString)
+	{
+		auto componentList = GetComponentList<T>();
+		std::string compListStr;
+		compListStr.reserve(256);
+		for (size_t i = 0; i < componentList.size(); ++i)
+		{
+			compListStr += componentToString(componentList[i]);
+			if (i < componentList.size() - 1)
+				compListStr += ", ";
+		}
+		ecs::Log("Components<{}> [{}]: {}", typeid(T).name(), componentList.size(), compListStr);
+	}
+
 	void InsertLists(ptrdiff_t index, Entity entity) override;
 	void RemoveLists(ptrdiff_t index) override;
+	void RebuildComponentLists() override;
 
 private:
 	template <typename T>
@@ -1150,20 +1215,20 @@ private:
 	QueryManager queryManager;
 };
 
-inline void LogSignature(const World& world, const char* label, Signature signature)
+inline void LogSignature(const World& world, Signature signature)
 {
-	ecs::Log("{}: Signature {}", label, signature);
-	ecs::Log("    Require: {}", world.BuildSignatureLayerString(signature.require));
-	ecs::Log("    Reject:  {}", world.BuildSignatureLayerString(signature.reject));
+	ecs::Log(" Require: {}", world.BuildSignatureLayerString(signature.require));
+	if (!signature.reject.empty())
+		ecs::Log(" Reject:  {}", world.BuildSignatureLayerString(signature.reject));
 }
 
 inline void LogCompareSignatures(const World& world, const char* label1, Signature signature1, const char* label2, Signature signature2)
 {
 	ecs::Log("Compare 1: {} {} -> 2: {} {}", label1, signature1, label2, signature2);
-	ecs::Log("    Require 1: {}", world.BuildSignatureLayerString(signature1.require));
-	ecs::Log("    Require 2: {}", world.BuildSignatureLayerString(signature2.require));
-	ecs::Log("    Reject  1: {}", world.BuildSignatureLayerString(signature1.reject));
-	ecs::Log("    Reject  2: {}", world.BuildSignatureLayerString(signature2.reject));
+	ecs::Log(" Require 1: {}", world.BuildSignatureLayerString(signature1.require));
+	ecs::Log(" Reject  1: {}", world.BuildSignatureLayerString(signature1.reject));
+	ecs::Log(" Require 2: {}", world.BuildSignatureLayerString(signature2.require));
+	ecs::Log(" Reject  2: {}", world.BuildSignatureLayerString(signature2.reject));
 }
 
 template <typename T, typename ... Components>
@@ -1201,43 +1266,92 @@ void for_each_argument(F f, Args&&... args) {
 	(void)std::initializer_list<int>{(f(std::forward<Args>(args)), 0)...};
 }
 
-template <typename TVec, typename TFieldTuple, std::size_t... TIdxs>
-void insert_tuple_vector(TVec& vec, ptrdiff_t index, TFieldTuple ft, std::index_sequence<TIdxs...>)
+template <typename F, typename TVec, std::size_t... TIdxs>
+void tuple_vector_apply(F&& f, TVec& tupleVec, std::index_sequence<TIdxs...>)
 {
 	for_each_argument([&](auto idx)
 		{
-			auto insertAt = std::get<idx>(vec).begin() + index;
-			std::get<idx>(vec).insert(insertAt, std::get<idx>(ft));
+			auto& idxVec = std::get<idx>(tupleVec);
+			f(idx, idxVec);
+		}, std::integral_constant<std::size_t, TIdxs>{}...);
+}
+
+template <typename TVec, typename TElement, std::size_t... TIdxs>
+void insert_tuple_vector(TVec& tupleVec, ptrdiff_t index, TElement tupleElement, std::index_sequence<TIdxs...>)
+{
+	for_each_argument([&](auto idx)
+		{
+			auto& idxVec = std::get<idx>(tupleVec);
+			auto insertAt = idxVec.begin() + index;
+			auto& idxElement = std::get<idx>(tupleElement);
+			idxVec.insert(insertAt, idxElement);
+		}, std::integral_constant<std::size_t, TIdxs>{}...);
+}
+
+template <typename TVec, typename TElement, std::size_t... TIdxs>
+void push_back_tuple_vector(TVec& tupleVec, TElement tupleElement, std::index_sequence<TIdxs...>)
+{
+	for_each_argument([&](auto idx)
+		{
+			auto& idxVec = std::get<idx>(tupleVec);
+			auto& idxElement = std::get<idx>(tupleElement);
+			idxVec.push_back(idxElement);
 		}, std::integral_constant<std::size_t, TIdxs>{}...);
 }
 
 template <typename TVec, std::size_t... TIdxs>
-void erase_tuple_vector(TVec& vec, ptrdiff_t index, std::index_sequence<TIdxs...>)
+void erase_tuple_vector(TVec& tupleVec, ptrdiff_t index, std::index_sequence<TIdxs...>)
 {
 	for_each_argument([&](auto idx)
 		{
-			auto eraseAt = std::get<idx>(vec).begin() + index;
-			std::get<idx>(vec).erase(eraseAt);
+			auto& idxVec = std::get<idx>(tupleVec);
+			auto eraseAt = idxVec.begin() + index;
+			idxVec.erase(eraseAt);
+		}, std::integral_constant<std::size_t, TIdxs>{}...);
+}
+
+template <typename TVec, std::size_t... TIdxs>
+void clear_tuple_vector(TVec& tupleVec, std::index_sequence<TIdxs...>)
+{
+	for_each_argument([&](auto idx)
+		{
+			auto& idxVec = std::get<idx>(tupleVec);
+			idxVec.clear();
 		}, std::integral_constant<std::size_t, TIdxs>{}...);
 }
 
 template <typename... Components>
 void Query<Components...>::InsertLists(ptrdiff_t index, Entity entity)
 {
-	auto comps = GetArchetype(entity);
-	
-	insert_tuple_vector(componentLists,
-		index,
-		comps,
-		std::make_index_sequence<std::tuple_size_v<decltype(comps)>>());
+	constexpr size_t tupleSize = std::tuple_size_v<component_reject_filter_t<Components...>>;
+	if constexpr (tupleSize > 0)
+	{
+		auto comps = GetArchetype(entity);
+		static_assert(tupleSize > 0);
+		insert_tuple_vector(componentLists,
+			index,
+			comps,
+			std::make_index_sequence<tupleSize>());
+	}
 }
 
 template <typename... Components>
 void Query<Components...>::RemoveLists(ptrdiff_t index)
 {
-	QueryBase::RemoveLists(index);
-
 	erase_tuple_vector(componentLists, index, std::make_index_sequence<std::tuple_size_v<decltype(componentLists)>>());
+}
+
+template <typename ... Components>
+void Query<Components...>::RebuildComponentLists()
+{
+	auto sequence = std::make_index_sequence<component_reject_filter_size_v<Components...>>();
+	tuple_vector_apply([&](auto idx, auto& idxVec) { idxVec.clear(); }, componentLists, sequence);
+
+	for (auto entity : entities)
+	{
+		auto components = GetArchetype(entity);
+		tuple_vector_apply([&](auto idx, auto& idxVec) { idxVec.push_back(std::get<idx>(components)); }, componentLists, sequence);
+	}
 }
 
 template <class... Components>
@@ -1250,7 +1364,8 @@ Query<Components...>* QueryManager::CreateQuery(QueryCallbacks callbacks, QueryB
 	QueryId queryId = nextQueryId++;
 	queriesBySignature[signature].emplace_back(queryId);
 
-	LogSignature(world, "Create Query", signature);
+	ecs::Log("Create Query {}", queryId);
+	LogSignature(world, signature);
 	queries[queryId] = std::make_unique<Query<Components...>>(queryId, &world, signature, callbacks, std::move(sortPredicate));
 	QueryBase* baseQuery = queries[queryId].get();
 	return static_cast<Query<Components...>*>(baseQuery);
@@ -1289,8 +1404,8 @@ inline void QueryManager::OnEntitySignatureChanged(Entity entity, Signature newS
 				// Entity did not match query but now does, add it to the query entity list
 				QueryBase* query = GetQueryUntypedById(queryId);
 
-				ecs::Log("Query {} match Entity {}", queryId, entity);
-				LogCompareSignatures(world, "Match Query", signature, "Entity", newSignature);
+				//ecs::Log("Query {} match Entity {}", queryId, entity);
+				//LogCompareSignatures(world, "Match Query", signature, "Entity", newSignature);
 
 #ifdef _DEBUG
 				auto search = std::ranges::find(query->GetEntities(), entity);
@@ -1307,8 +1422,8 @@ inline void QueryManager::OnEntitySignatureChanged(Entity entity, Signature newS
 				// Entity no longer matches query but used to so remove it from the query entity list
 				QueryBase* query = GetQueryUntypedById(queryId);
 
-				ecs::Log("Query {} unmatch Entity {}", queryId, entity);
-				LogCompareSignatures(world, "Unmatch Query", signature, "Entity", newSignature);
+				//ecs::Log("Query {} unmatch Entity {}", queryId, entity);
+				//LogCompareSignatures(world, "Unmatch Query", signature, "Entity", newSignature);
 
 #ifdef _DEBUG
 				auto search = std::ranges::find(query->GetEntities(), entity);

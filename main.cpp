@@ -45,15 +45,125 @@ struct TestSize
 struct TestIndex
 {
 	int index{};
-	float radius = 1;
 	float time{};
 };
+
+
+template<>
+struct std::formatter<TestIndex> : std::formatter<std::string>
+{
+	auto format(TestIndex ti, format_context& ctx) const
+	{
+		return formatter<string>::format(std::format("{}", ti.index), ctx);
+	}
+};
+
+template <typename Iter>
+void LogIterator(Iter first, Iter last, const std::string& typeLabel, const std::string& label)
+{
+	ptrdiff_t index = 0;
+	ptrdiff_t count = std::distance(first, last);
+
+	std::string elementStrs;
+	elementStrs.reserve(256);
+
+	std::for_each(first, last, [&index, count, &elementStrs](const auto& value)
+		{
+
+			std::unwrap_ref_decay_t<decltype(value)> v = value;
+			elementStrs += std::format("{}{}", v, (index < count - 1) ? ", " : " ");
+			++index;
+		});
+
+	using T = typename std::iterator_traits<Iter>::value_type;
+
+	debug::Log("{} {}<{}> [{}] : {}", label, typeLabel, typeid(T).name(), count, elementStrs);
+}
+
+
+struct TestSystem : System<TestSystem, TestIndex, Transform, TestSize, TestColor>
+{
+	float t = 0;
+	Query<TestIndex, TestSize>* query{};
+	size_t lastSize = 0;
+
+	void OnRegistered() override
+	{
+		query = GetWorld().CreateQuery<TestIndex, TestSize>({}, [](World& world, Entity a, Entity b)
+			{
+				auto& idxA = world.GetComponent<TestIndex>(a);
+				auto& idxB = world.GetComponent<TestIndex>(b);
+				return idxA.index < idxB.index;
+			});
+	}
+
+	void Update(const GameTime& time)
+	{
+		if (query->GetEntities().size() > lastSize)
+		{
+			query->LogComponentList<TestIndex>([](const TestIndex& ti)
+				{
+					return std::to_string(ti.index);
+				});
+		}
+		lastSize = query->GetEntities().size();
+
+		for (auto& entities = GetEntities(); Entity entity : entities)
+		{
+			auto [index, transform, size, color] = GetArchetype(entity);
+
+
+			float indexRatio = static_cast<float>(index.index) / entities.size();
+			index.time += time.dt() * indexRatio * math::Phi;
+			float radians = math::E * math::Phi * index.index + index.time + time.t();
+			float radius = 0.5f + indexRatio * math::Phi * 4.0f;
+
+			Vec2 targetPosition = Vec2{ 8, 5 } + Vec2{ std::cos(radians), std::sin(radians) } * radius;
+
+			transform.position = vec2::Damp(transform.position, targetPosition, 5.0f, time.dt());
+		}
+
+		if (input::GetKeyDown(SDL_SCANCODE_L))
+		{
+			auto testIndices = query->GetComponentList<TestIndex>();
+			bool isSorted = std::ranges::is_sorted(testIndices, [](const TestIndex& a, const TestIndex& b) { return a.index < b.index;  });
+			debug::Log("query sorted: {}", isSorted);
+			auto last = std::ranges::upper_bound(testIndices, TestIndex{ 4 }, [this](const TestIndex& a, const TestIndex& b) { return a.index < b.index; });
+			auto first = testIndices.begin();
+			int32_t count = static_cast<int32_t>(std::distance(testIndices.begin(), last));
+			intptr_t firstIndex = std::distance(testIndices.begin(), first);
+			intptr_t lastIndex = std::distance(testIndices.begin(), last);
+
+			for (auto iter = first; iter != last; ++iter)
+			{
+				int32_t idx = static_cast<int32_t>(std::distance(first, iter));
+				Entity spawned = query->GetEntityAtIndex(idx);
+				GetWorld().AddComponent<Expiration>(spawned, Expiration{});
+			}
+		}
+	}
+
+	void Render(const DrawContext& ctx, const Camera& activeCamera)
+	{
+		for (auto& entities = GetEntities(); Entity entity : entities)
+		{
+			auto [index, transform, size, color] = GetArchetype(entity);
+
+			Vec2 screenPos = camera::WorldToScreen(activeCamera, transform.position);
+			Vec2 screenSize = vec2::One * size.size;
+
+			DrawRect r{ screenPos - screenSize / 2, screenSize };
+			draw::RectFill(ctx, r, color.color);
+		}
+	}
+};
+
 struct TestSpawnerSystem : System<TestSpawnerSystem>
 {
 	Query<TestIndex>* query{};
 	float interval = 0.01f;
 	float timer = 0.5f;
-	static_stack<Entity, 640> spawned{};
+	static_stack<Entity, 8> spawned{};
 
 	void OnRegistered() override
 	{
@@ -62,12 +172,23 @@ struct TestSpawnerSystem : System<TestSpawnerSystem>
 			{
 				auto index = GetWorld().GetComponent<TestIndex>(entity);
 				spawned[index.index] = entity;
+				LogIterator(spawned.begin(), spawned.end(), "static_stack", "Spawned");
+				const auto& list = query->GetComponentList<TestIndex>();
+				LogIterator(list.begin(), list.end(), "ComponentList", "Query");
 			},
 			[this](Entity entity)
 			{
 				auto index = GetWorld().GetComponent<TestIndex>(entity);
 				spawned[index.index] = 0;
-			} });
+				LogIterator(spawned.begin(), spawned.end(), "static_stack", "Spawned");
+				const auto& list = query->GetComponentList<TestIndex>();
+				LogIterator(list.begin(), list.end(), "ComponentList", "Query");
+			} }, [](World& world, Entity a, Entity b)
+			{
+				auto& idxA = world.GetComponent<TestIndex>(a);
+				auto& idxB = world.GetComponent<TestIndex>(b);
+				return idxA.index < idxB.index;
+			});
 	}
 
 	void Update(const GameTime& time)
@@ -99,7 +220,7 @@ struct TestSpawnerSystem : System<TestSpawnerSystem>
 
 					float ratio = static_cast<float>(index) / spawned.capacity();
 
-					GetWorld().AddComponents(entity, Transform{ {8, 5} }, TestIndex{ static_cast<int>(index), 0.5f + ratio * math::Phi * 8.0f }, TestColor{ colors[index % 6] }, TestSize{ ratio * 4 + 1 });
+					GetWorld().AddComponents(entity, Transform{ {8, 5} }, TestIndex{ static_cast<int>(index) }, TestColor{ colors[index % 6] }, TestSize{ 8 });
 				}
 			}
 		}
@@ -120,70 +241,6 @@ struct TestSpawnerSystem : System<TestSpawnerSystem>
 };
 
 
-struct TestSystem : System<TestSystem, TestIndex, Transform, TestSize, TestColor>
-{
-	float t = 0;
-	Query<TestIndex, TestSize>* query{};
-
-	void OnRegistered() override
-	{
-		query = GetWorld().CreateQuery<TestIndex, TestSize>({}, [](World& world, Entity a, Entity b)
-			{
-				auto& [sizeA] = world.GetComponent<TestSize>(a);
-				auto& [sizeB] = world.GetComponent<TestSize>(b);
-				return sizeA < sizeB;
-			});
-	}
-
-	void Update(const GameTime& time)
-	{
-		for (auto& entities = GetEntities(); Entity entity : entities)
-		{
-			auto [index, transform, size, color] = GetArchetype(entity);
-
-
-			float indexRatio = static_cast<float>(index.index) / entities.size();
-			index.time += time.dt() * indexRatio * math::Phi;
-			float radians = math::E * math::Phi * index.index + index.time + time.t();
-
-			Vec2 targetPosition = Vec2{ 8, 5 } + Vec2{ std::cos(radians), std::sin(radians) } *index.radius;
-
-			transform.position = vec2::Damp(transform.position, targetPosition, 5.0f, time.dt());
-		}
-
-		if (input::GetKeyDown(SDL_SCANCODE_L))
-		{
-			auto testSizes = query->GetComponentList<TestSize>();
-			bool isSorted = std::ranges::is_sorted(testSizes, [](const TestSize& a, const TestSize& b) { return a.size < b.size;  });
-			debug::Log("query sorted: {}", isSorted);
-			auto last = std::ranges::upper_bound(testSizes, TestSize{ 2.9f }, [this](const TestSize& a, const TestSize& b) { return a.size < b.size; });
-			auto first = testSizes.begin();
-			int32_t count = static_cast<int32_t>(std::distance(testSizes.begin(), last));
-			debug::Log("query matched {} entities", count);
-			std::accumulate(first, last, count, [this](int32_t index, const TestSize& size)
-				{
-					Entity spawned = query->GetEntityAtIndex(index);
-					//GetWorld().DestroyEntity(spawned);			  // investigate Destroy/DestroyImmediate, create DestroyTag, Reject<DestroyTag> outright?
-					GetWorld().AddComponent<Expiration>(spawned, {}); // works much more reliably, need to investigate updating query appropriately as 
-					return index + 1;
-				});
-		}
-	}
-
-	void Render(const DrawContext& ctx, const Camera& activeCamera)
-	{
-		for (auto& entities = GetEntities(); Entity entity : entities)
-		{
-			auto [index, transform, size, color] = GetArchetype(entity);
-
-			Vec2 screenPos = camera::WorldToScreen(activeCamera, transform.position);
-			Vec2 screenSize = vec2::One * size.size;
-
-			DrawRect r{ screenPos - screenSize / 2, screenSize };
-			draw::RectFill(ctx, r, color.color);
-		}
-	}
-};
 
 int main(int argc, char* argv[])
 {
