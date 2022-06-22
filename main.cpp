@@ -89,12 +89,13 @@ struct TestSystem : System<TestSystem, TestIndex, Transform, TestSize, TestColor
 
 	void OnRegistered() override
 	{
-		query = GetWorld().CreateQuery<TestIndex, TestSize>({}, [](World& world, Entity a, Entity b)
-			{
-				auto& idxA = world.GetComponent<TestIndex>(a);
-				auto& idxB = world.GetComponent<TestIndex>(b);
-				return idxA.index < idxB.index;
-			});
+		query = GetWorld().CreateQuery<TestIndex, TestSize>({});
+		/*[](World& world, Entity a, Entity b)
+		{
+			auto& idxA = world.GetComponent<TestIndex>(a);
+			auto& idxB = world.GetComponent<TestIndex>(b);
+			return idxA.index < idxB.index;
+		}*/
 	}
 
 	void Update(const GameTime& time)
@@ -183,12 +184,14 @@ struct TestSpawnerSystem : System<TestSpawnerSystem>
 				//LogIterator(spawned.begin(), spawned.end(), "static_stack", "Spawned");
 				const auto& list = query->GetComponentList<TestIndex>();
 				//LogIterator(list.begin(), list.end(), "ComponentList", "Query");
-			} }, [](World& world, Entity a, Entity b)
-			{
-				auto& idxA = world.GetComponent<TestIndex>(a);
-				auto& idxB = world.GetComponent<TestIndex>(b);
-				return idxA.index < idxB.index;
-			});
+			} });
+
+		/*[](World& world, Entity a, Entity b)
+		{
+			auto& idxA = world.GetComponent<TestIndex>(a);
+			auto& idxB = world.GetComponent<TestIndex>(b);
+			return idxA.index < idxB.index;
+		}*/
 	}
 
 	void Update(const GameTime& time)

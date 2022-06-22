@@ -188,9 +188,22 @@ namespace spawner
 	}
 }
 
+bool SpawnSourceCompare(const SpawnSource& a, const SpawnSource& b)
+{
+	return a.source < b.source;
+}
+
 void SpawnerSystem::OnRegistered()
 {
-	spawnSourceQuery = GetWorld().CreateQuery<Reject<Prefab>, SpawnSource, Transform>(
+			/*auto& [sourceA] = world.GetComponent<SpawnSource>(a);
+			auto& [sourceB] = world.GetComponent<SpawnSource>(b);
+			return sourceA < sourceB || ((sourceA == sourceB) ? a < b : false);*/
+	//SortedQuery<Reject<Prefab>, SpawnSource, Transform>::SortPredicate 
+	spawnSourceQuery = GetWorld().CreateSortedQuery<Reject<Prefab>, SpawnSource, Transform>(
+		[&](Entity e0, Entity e1)
+		{
+			return SpawnSourceCompare(GetWorld().GetComponent<SpawnSource>(e0), GetWorld().GetComponent<SpawnSource>(e1));
+		},
 		QueryCallbacks{
 			.onEntityMatch = {},
 			.onEntityUnmatch = [this](Entity e)
@@ -201,13 +214,7 @@ void SpawnerSystem::OnRegistered()
 					if (entity == source)
 						GetWorld().GetComponent<Spawner>(entity).spawnedEnemies--;
 				}}
-		},
-		[](World& world, Entity a, Entity b)
-				{
-					auto& [sourceA] = world.GetComponent<SpawnSource>(a);
-					auto& [sourceB] = world.GetComponent<SpawnSource>(b);
-					return sourceA < sourceB || ((sourceA == sourceB) ? a < b : false);
-				});
+		});
 }
 
 
@@ -254,15 +261,23 @@ void SpawnerSystem::Update(const GameTime& time)
 
 		Entity entity = entities[s_kill % entities.size()];
 
-			auto first = std::ranges::lower_bound(sources, SpawnSource{ entity }, [](const SpawnSource& a, const SpawnSource& b) { return a.source < b.source; });
-			auto last = std::ranges::upper_bound(sources, SpawnSource{ entity }, [](const SpawnSource& a, const SpawnSource& b) { return a.source < b.source; });
-			static_cast<void>(std::accumulate(first, last, static_cast<int32_t>(first - sources.begin()),
-				[this](int32_t index, const SpawnSource& source)
-				{
-					Entity spawned = spawnSourceQuery->GetEntityAtIndex(index);
-					//GetWorld().DestroyEntity(spawned);			  // investigate Destroy/DestroyImmediate, create DestroyTag, Reject<DestroyTag> outright?
-					GetWorld().AddComponent<Expiration>(spawned, {}); // works much more reliably, need to investigate updating query appropriately as 
-					return index + 1;
-				}));
+		auto firstIndex = spawnSourceQuery->LowerBound<SpawnSource>(SpawnSource{ entity }, SpawnSourceCompare);
+		auto lastIndex = spawnSourceQuery->UpperBound<SpawnSource>(SpawnSource{ entity }, SpawnSourceCompare);
+
+		for (auto index = firstIndex; index < lastIndex; ++index)
+		{
+			GetWorld().AddComponent(spawnSourceQuery->GetEntityAtIndex(index), Expiration{});
+		}
+
+			//auto first = std::ranges::lower_bound(sources, SpawnSource{ entity }, [](const SpawnSource& a, const SpawnSource& b) { return a.source < b.source; });
+			//auto last = std::ranges::upper_bound(sources, SpawnSource{ entity }, [](const SpawnSource& a, const SpawnSource& b) { return a.source < b.source; });
+			//static_cast<void>(std::accumulate(first, last, static_cast<int32_t>(first - sources.begin()),
+			//	[this](int32_t index, const SpawnSource& source)
+			//	{
+			//		Entity spawned = spawnSourceQuery->GetEntityAtIndex(index);
+			//		//GetWorld().DestroyEntity(spawned);			  // investigate Destroy/DestroyImmediate, create DestroyTag, Reject<DestroyTag> outright?
+			//		GetWorld().AddComponent<Expiration>(spawned, {}); // works much more reliably, need to investigate updating query appropriately as 
+			//		return index + 1;
+			//	}));
 	}
 }

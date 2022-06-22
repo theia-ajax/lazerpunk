@@ -547,13 +547,10 @@ struct QueryCallbacks
 	void OnEntityUnmatch(Entity entity) const { if (onEntityUnmatch) onEntityUnmatch(entity); }
 };
 
-static constexpr bool DefaultQuerySort(const World& world, Entity a, Entity b) { return a < b; }
-
-class QueryBase  // NOLINT(cppcoreguidelines-special-member-functions)
+struct QueryBase  // NOLINT(cppcoreguidelines-special-member-functions)
 {
-public:
 	virtual ~QueryBase() = default;
-	using SortPredicate = std::function<bool(World&, Entity, Entity)>;
+	using Index = std::iter_difference_t<std::vector<Entity>>;
 
 	QueryBase() = delete;
 	QueryBase(const QueryBase& other) = delete;
@@ -561,18 +558,21 @@ public:
 	QueryBase operator=(const QueryBase& other) = delete;
 	QueryBase operator=(QueryBase&& other) = delete;
 
-	explicit QueryBase(QueryId _queryId, World* _world, Signature _signature, QueryCallbacks _callbacks, SortPredicate _sortPredicate)
+	explicit QueryBase(QueryId _queryId, World* _world, Signature _signature, QueryCallbacks _callbacks)
 		: queryId(_queryId)
 		, signature(_signature)
 		, callbacks(std::move(_callbacks))
-		, sortPredicate(std::move(_sortPredicate))
 		, world(_world) {}
 
 	World& GetWorld() const { return *world; }
 	const std::vector<Entity>& GetEntities() { return entities; }
 	Signature GetSignature() const { return signature; }
-	void OnEntityMatch(Entity entity) const { callbacks.OnEntityMatch(entity); }
-	void OnEntityUnmatch(Entity entity) const { callbacks.OnEntityUnmatch(entity); }
+
+	Entity GetEntityAtIndex(Index index) const
+	{
+		ASSERT(index >= 0 && index < static_cast<Index>(entities.size()) && "Index out of query range.");
+		return entities[index];
+	}
 
 	void InitializeEntityList(const EntityManager& entityManager)
 	{
@@ -586,94 +586,56 @@ public:
 			ecs::Log("Initialized query and added {} entities to it.", entities.size());
 	}
 
-	virtual void InsertLists(ptrdiff_t index, Entity entity) { ASSERT(false && "SHOULDNT HAPPEN"); }
-	virtual void RemoveLists(ptrdiff_t index) { ASSERT(false && "SHOULDNT HAPPEN"); }
+	void OnEntityMatch(Entity entity) const { callbacks.OnEntityMatch(entity); }
+	void OnEntityUnmatch(Entity entity) const { callbacks.OnEntityUnmatch(entity); }
+
+	virtual void InsertLists(Index index, Entity entity) { ASSERT(false && "SHOULDNT HAPPEN"); }
+	virtual void RemoveLists(Index index) { ASSERT(false && "SHOULDNT HAPPEN"); }
 	virtual void RefreshComponentReferences() { ASSERT(false); }
 
+	virtual Index FindEntityIndex(Entity entity)
+	{
+		auto search = std::ranges::lower_bound(entities, entity, [](Entity e0, Entity e1) { return e0 < e1; });
+		return std::distance(entities.begin(), search);
+	}
 
-
-public:
 	void AddEntity(Entity entity)
 	{
-		auto insertAt = std::ranges::lower_bound(entities, entity, SortCaller(sortPredicate, *world));
-		auto index = std::distance(entities.begin(), insertAt);
+		auto index = FindEntityIndex(entity);
 		ecs::Log("Query {} Add Entity {} at index {}", queryId, entity, index);
-		Insert(index, entity);
+		entities.insert(entities.begin() + index, entity);
+		InsertLists(index, entity);
 		OnEntityMatch(entity);
 	}
 
 	void RemoveEntity(Entity entity)
 	{
-		auto eraseAt = std::ranges::lower_bound(entities, entity, SortCaller(sortPredicate, *world));
-		auto index = std::distance(entities.begin(), eraseAt);
+		auto index = FindEntityIndex(entity);
 		ecs::Log("Query {} Remove Entity {} from index {}", queryId, entity, index);
-		Remove(index);
+		entities.erase(entities.begin() + index);
+		RemoveLists(index);
 		OnEntityUnmatch(entity);
 	}
 
-	int32_t GetEntityIndex(Entity entity)
-	{
-		auto search = std::ranges::lower_bound(entities, entity, SortCaller(sortPredicate, *world));
-		if (search == entities.end())
-			return -1;
-		return static_cast<int32_t>(std::distance(entities.begin(), search));
-	}
-
-	Entity GetEntityAtIndex(int32_t index) const
-	{
-		ASSERT(index >= 0 && index < static_cast<int32_t>(entities.size()) && "Index out of query range.");
-		return entities[index];
-	}
-
-	SortPredicate GetSortPredicate() { return sortPredicate; }
-	std::function<bool(Entity, Entity)> GetPredicate() const { return [this](Entity a, Entity b) { return sortPredicate(GetWorld(), a, b); }; }
-
-private:
-	void Insert(ptrdiff_t index, Entity entity)
-	{
-		entities.insert(entities.begin() + index, entity);
-		InsertLists(index, entity);
-	}
-
-	void Remove(ptrdiff_t index)
-	{
-		entities.erase(entities.begin() + index);
-		RemoveLists(index);
-	}
-
-	struct SortCaller
-	{
-		SortCaller(SortPredicate pred, World& world) : pred(std::move(pred)), world(world) {}
-		bool operator()(Entity a, Entity b) const { return pred(world, a, b); }
-		SortPredicate pred;
-		World& world;
-	};
-
-protected:
 	QueryId queryId;
 	std::vector<Entity> entities;
 	Signature signature;
 	QueryCallbacks callbacks;
-	SortPredicate sortPredicate;
-private:
 	World* world;
 };
 
-
-
-
 template <typename... Components>
-class Query final : public QueryBase
+struct Query : QueryBase
 {
-public:
+	~Query() override = default;
 	Query() = delete;
 	Query(const Query& other) = delete;
 	Query(Query&& other) = delete;
 	Query operator=(const Query& other) = delete;
 	Query operator=(Query&& other) = delete;
 
-	explicit Query(QueryId _queryId, World* _world, Signature _signature, QueryCallbacks _callbacks, SortPredicate _sortPredicate)
-		: QueryBase(_queryId, _world, _signature, _callbacks, _sortPredicate) { }
+	explicit Query(QueryId _queryId, World* _world, Signature _signature, QueryCallbacks _callbacks)
+		: QueryBase(_queryId, _world, _signature, _callbacks) { }
 
 	auto GetArchetype(Entity entity) const
 	{
@@ -706,11 +668,16 @@ public:
 		ecs::Log("Components<{}> [{}]: {}", typeid(T).name(), componentList.size(), compListStr);
 	}
 
-	void InsertLists(ptrdiff_t index, Entity entity) override;
-	void RemoveLists(ptrdiff_t index) override;
+	template <typename T>
+	T& GetComponentAtIndex(Index index) const
+	{
+		return GetComponentList<T>()[index];
+	}
+
+	void InsertLists(Index index, Entity entity) override;
+	void RemoveLists(Index index) override;
 	void RefreshComponentReferences() override;
 
-private:
 	template <typename T>
 	auto GetFirstListHelper() const
 	{
@@ -733,12 +700,99 @@ private:
 	component_ref_vector_reject_filter_t<Components...> componentLists;
 };
 
+template <typename... Components>
+struct SortedQuery : Query<Components...>
+{
+	using Index = typename Query<Components...>::Index;
+	using SortPredicate = std::function<bool(Entity, Entity)>;
+
+
+	~SortedQuery() override = default;
+	SortedQuery() = delete;
+	SortedQuery(const SortedQuery& other) = delete;
+	SortedQuery(SortedQuery&& other) = delete;
+	SortedQuery operator=(const SortedQuery& other) = delete;
+	SortedQuery operator=(SortedQuery&& other) = delete;
+
+	explicit SortedQuery(QueryId _queryId, World* _world, Signature _signature, QueryCallbacks _callbacks, SortPredicate sortPredicate)
+		: Query<Components...>(_queryId, _world, _signature, _callbacks), sortPredicate(sortPredicate) { }
+
+
+	template <typename T, typename F>
+	auto BoundIter(const T& needle, F&& f) const
+	{
+		const auto& list = this->template GetComponentList<T>();
+		auto first = list.begin();
+		auto last = list.end();
+		while (first != last)
+		{
+			auto distance = std::distance(first, last);
+			auto mid = first + distance / 2;
+
+			if (f(needle, *mid))
+				first = mid + 1;
+			else
+				last = mid;
+		}
+		return first;
+	}
+
+	template <typename T, typename F>
+	auto LowerBoundIter(const T& needle, F&& f) const
+	{
+		return BoundIter(needle, f);
+	}
+
+	template <typename T, typename F>
+	auto UpperBoundIter(const T& needle, F&& f) const
+	{
+		return BoundIter(needle, std::not_fn(f));
+	}
+
+	template <typename T, typename F>
+	Index LowerBound(const T& needle, F&& f) const
+	{
+		const auto& list = this->template GetComponentList<T>();
+		auto head = LowerBoundIter(needle, f);
+		return std::distance(list.begin(), head);
+	}
+
+	template <typename T, typename F>
+	Index UpperBound(const T& needle, F&& f) const
+	{
+		const auto& list = this->template GetComponentList<T>();
+		auto head = UpperBoundIter(needle, f);
+		return std::distance(list.begin(), head);
+	}
+
+	//template <typename T, typename F>
+	//QueryBase::Index UpperBound(const T& needle, F&& f)
+	//{
+	//	const auto& haystack = this->template GetComponentList<T>();
+	//	auto search = std::ranges::upper_bound(haystack, needle,
+	//		[&](const auto& a, const auto& b)
+	//		{
+	//			return f(a, b);
+	//		});
+	//	return std::distance(haystack.begin(), search);
+	//}
+
+	Index FindEntityIndex(Entity entity) override
+	{
+		auto search = std::ranges::lower_bound(this->entities, entity, sortPredicate);
+		return std::distance(this->entities.begin(), search);
+	}
+
+	SortPredicate sortPredicate;
+};
+
 class QueryManager
 {
 public:
 	explicit QueryManager(World& world) : world(world) {}
 
-	template <class... Components> Query<Components...>* CreateQuery(QueryCallbacks callbacks, QueryBase::SortPredicate sortPredicate);
+	template <class... Components> Query<Components...>* CreateQuery(QueryCallbacks callbacks);
+	template <class... Components> SortedQuery<Components...>* CreateSortedQuery(typename SortedQuery<Components...>::SortPredicate sortPredicate, QueryCallbacks callbacks);
 	QueryBase* GetQueryUntypedById(QueryId queryId) const;
 	template <class... Components> Query<Components...>* GetQueryById(QueryId queryId);
 
@@ -1108,9 +1162,17 @@ public:
 	}
 
 	template <typename... Components>
-	Query<Components...>* CreateQuery(QueryCallbacks callbacks = {}, QueryBase::SortPredicate sortPredicate = DefaultQuerySort)
+	Query<Components...>* CreateQuery(QueryCallbacks callbacks = {})
 	{
-		auto query = queryManager.CreateQuery<Components...>(callbacks, sortPredicate);
+		auto query = queryManager.CreateQuery<Components...>(callbacks);
+		query->InitializeEntityList(entityManager);
+		return query;
+	}
+
+	template <typename... Components>
+	SortedQuery<Components...>* CreateSortedQuery(typename SortedQuery<Components...>::SortPredicate predicate, QueryCallbacks callbacks = {})
+	{
+		auto query = queryManager.CreateSortedQuery<Components...>(predicate, callbacks);
 		query->InitializeEntityList(entityManager);
 		return query;
 	}
@@ -1265,7 +1327,7 @@ void tuple_vector_apply(F&& f, TVec& tupleVec, std::index_sequence<TIdxs...>)
 }
 
 template <typename... Components>
-void Query<Components...>::InsertLists(ptrdiff_t index, Entity entity)
+void Query<Components...>::InsertLists(Index index, Entity entity)
 {
 	if constexpr (component_reject_filter_size_v<Components...> > 0)
 	{
@@ -1276,7 +1338,7 @@ void Query<Components...>::InsertLists(ptrdiff_t index, Entity entity)
 }
 
 template <typename... Components>
-void Query<Components...>::RemoveLists(ptrdiff_t index)
+void Query<Components...>::RemoveLists(Index index)
 {
 	auto sequence = std::make_index_sequence<component_reject_filter_size_v<Components...>>();
 	tuple_vector_apply([&](auto idx, auto& idxVec) { idxVec.erase(idxVec.begin() + index); }, componentLists, sequence);
@@ -1297,7 +1359,7 @@ void Query<Components...>::RefreshComponentReferences()
 }
 
 template <class... Components>
-Query<Components...>* QueryManager::CreateQuery(QueryCallbacks callbacks, QueryBase::SortPredicate sortPredicate)
+Query<Components...>* QueryManager::CreateQuery(QueryCallbacks callbacks)
 {
 	Signature signature = world.BuildSignature<Components...>();
 
@@ -1308,9 +1370,26 @@ Query<Components...>* QueryManager::CreateQuery(QueryCallbacks callbacks, QueryB
 
 	ecs::Log("Create Query {}", queryId);
 	LogSignature(world, signature);
-	queries[queryId] = std::make_unique<Query<Components...>>(queryId, &world, signature, callbacks, std::move(sortPredicate));
+	queries[queryId] = std::make_unique<Query<Components...>>(queryId, &world, signature, callbacks);
 	QueryBase* baseQuery = queries[queryId].get();
 	return static_cast<Query<Components...>*>(baseQuery);
+}
+
+template <class ... Components>
+SortedQuery<Components...>* QueryManager::CreateSortedQuery(typename SortedQuery<Components...>::SortPredicate sortPredicate, QueryCallbacks callbacks)
+{
+	Signature signature = world.BuildSignature<Components...>();
+
+	signatures.insert(signature);
+
+	QueryId queryId = nextQueryId++;
+	queriesBySignature[signature].emplace_back(queryId);
+
+	ecs::Log("Create Sorted Query {}", queryId);
+	LogSignature(world, signature);
+	queries[queryId] = std::make_unique<SortedQuery<Components...>>(queryId, &world, signature, callbacks, sortPredicate);
+	QueryBase* baseQuery = queries[queryId].get();
+	return static_cast<SortedQuery<Components...>*>(baseQuery);
 }
 
 
