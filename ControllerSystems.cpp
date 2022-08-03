@@ -198,12 +198,8 @@ void SpawnerSystem::OnRegistered()
 			/*auto& [sourceA] = world.GetComponent<SpawnSource>(a);
 			auto& [sourceB] = world.GetComponent<SpawnSource>(b);
 			return sourceA < sourceB || ((sourceA == sourceB) ? a < b : false);*/
-	//SortedQuery<Reject<Prefab>, SpawnSource, Transform>::SortPredicate 
-	spawnSourceQuery = GetWorld().CreateSortedQuery<Reject<Prefab>, SpawnSource, Transform>(
-		[&](Entity e0, Entity e1)
-		{
-			return SpawnSourceCompare(GetWorld().GetComponent<SpawnSource>(e0), GetWorld().GetComponent<SpawnSource>(e1));
-		},
+	//SortedQuery<Reject<Prefab>, SpawnSource, Transform>::SortPredicate
+	spawnSourceQuery = GetWorld().CreateQuery<Reject<Prefab>, SpawnSource, Transform>(
 		QueryCallbacks{
 			.onEntityMatch = {},
 			.onEntityUnmatch = [this](Entity e)
@@ -237,6 +233,7 @@ void SpawnerSystem::Update(const GameTime& time)
 					if (Entity spawned = spawner::Spawn(GetWorld(), spawner, transform.position, transform.rotation))
 					{
 						GetWorld().AddComponent(spawned, SpawnSource{ entity });
+						debug::Log("Spawned {} on source {}", spawned, entity);
 						spawner.spawnedEnemies++;
 					}
 				}
@@ -261,23 +258,15 @@ void SpawnerSystem::Update(const GameTime& time)
 
 		Entity entity = entities[s_kill % entities.size()];
 
-		auto firstIndex = spawnSourceQuery->LowerBound<SpawnSource>(SpawnSource{ entity }, SpawnSourceCompare);
-		auto lastIndex = spawnSourceQuery->UpperBound<SpawnSource>(SpawnSource{ entity }, SpawnSourceCompare);
-
-		for (auto index = firstIndex; index < lastIndex; ++index)
+		const auto& spawnedEntities = spawnSourceQuery->GetEntities();
+		for (size_t i = 0; i < spawnedEntities.size(); ++i)
 		{
-			GetWorld().AddComponent(spawnSourceQuery->GetEntityAtIndex(index), Expiration{});
+			Entity spawnedEntity = spawnedEntities[i];
+			if (sources[i].get().source == entity)
+			{
+				debug::Log("Destroying {} with source {}", spawnedEntity, sources[i].get().source);
+				GetWorld().AddComponent(spawnedEntity, Expiration{});
+			}
 		}
-
-			//auto first = std::ranges::lower_bound(sources, SpawnSource{ entity }, [](const SpawnSource& a, const SpawnSource& b) { return a.source < b.source; });
-			//auto last = std::ranges::upper_bound(sources, SpawnSource{ entity }, [](const SpawnSource& a, const SpawnSource& b) { return a.source < b.source; });
-			//static_cast<void>(std::accumulate(first, last, static_cast<int32_t>(first - sources.begin()),
-			//	[this](int32_t index, const SpawnSource& source)
-			//	{
-			//		Entity spawned = spawnSourceQuery->GetEntityAtIndex(index);
-			//		//GetWorld().DestroyEntity(spawned);			  // investigate Destroy/DestroyImmediate, create DestroyTag, Reject<DestroyTag> outright?
-			//		GetWorld().AddComponent<Expiration>(spawned, {}); // works much more reliably, need to investigate updating query appropriately as 
-			//		return index + 1;
-			//	}));
 	}
 }

@@ -700,99 +700,12 @@ private:
 	component_ref_vector_reject_filter_t<Components...> componentLists;
 };
 
-template <typename... Components>
-struct SortedQuery : Query<Components...>
-{
-	using Index = typename Query<Components...>::Index;
-	using SortPredicate = std::function<bool(Entity, Entity)>;
-
-
-	~SortedQuery() override = default;
-	SortedQuery() = delete;
-	SortedQuery(const SortedQuery& other) = delete;
-	SortedQuery(SortedQuery&& other) = delete;
-	SortedQuery operator=(const SortedQuery& other) = delete;
-	SortedQuery operator=(SortedQuery&& other) = delete;
-
-	explicit SortedQuery(QueryId _queryId, World* _world, Signature _signature, QueryCallbacks _callbacks, SortPredicate sortPredicate)
-		: Query<Components...>(_queryId, _world, _signature, _callbacks), sortPredicate(sortPredicate) { }
-
-
-	template <typename T, typename F>
-	auto BoundIter(const T& needle, F&& f) const
-	{
-		const auto& list = this->template GetComponentList<T>();
-		auto first = list.begin();
-		auto last = list.end();
-		while (first != last)
-		{
-			auto distance = std::distance(first, last);
-			auto mid = first + distance / 2;
-
-			if (f(needle, *mid))
-				first = mid + 1;
-			else
-				last = mid;
-		}
-		return first;
-	}
-
-	template <typename T, typename F>
-	auto LowerBoundIter(const T& needle, F&& f) const
-	{
-		return BoundIter(needle, f);
-	}
-
-	template <typename T, typename F>
-	auto UpperBoundIter(const T& needle, F&& f) const
-	{
-		return BoundIter(needle, std::not_fn(f));
-	}
-
-	template <typename T, typename F>
-	Index LowerBound(const T& needle, F&& f) const
-	{
-		const auto& list = this->template GetComponentList<T>();
-		auto head = LowerBoundIter(needle, f);
-		return std::distance(list.begin(), head);
-	}
-
-	template <typename T, typename F>
-	Index UpperBound(const T& needle, F&& f) const
-	{
-		const auto& list = this->template GetComponentList<T>();
-		auto head = UpperBoundIter(needle, f);
-		return std::distance(list.begin(), head);
-	}
-
-	//template <typename T, typename F>
-	//QueryBase::Index UpperBound(const T& needle, F&& f)
-	//{
-	//	const auto& haystack = this->template GetComponentList<T>();
-	//	auto search = std::ranges::upper_bound(haystack, needle,
-	//		[&](const auto& a, const auto& b)
-	//		{
-	//			return f(a, b);
-	//		});
-	//	return std::distance(haystack.begin(), search);
-	//}
-
-	Index FindEntityIndex(Entity entity) override
-	{
-		auto search = std::ranges::lower_bound(this->entities, entity, sortPredicate);
-		return std::distance(this->entities.begin(), search);
-	}
-
-	SortPredicate sortPredicate;
-};
-
 class QueryManager
 {
 public:
 	explicit QueryManager(World& world) : world(world) {}
 
 	template <class... Components> Query<Components...>* CreateQuery(QueryCallbacks callbacks);
-	template <class... Components> SortedQuery<Components...>* CreateSortedQuery(typename SortedQuery<Components...>::SortPredicate sortPredicate, QueryCallbacks callbacks);
 	QueryBase* GetQueryUntypedById(QueryId queryId) const;
 	template <class... Components> Query<Components...>* GetQueryById(QueryId queryId);
 
@@ -1170,14 +1083,6 @@ public:
 	}
 
 	template <typename... Components>
-	SortedQuery<Components...>* CreateSortedQuery(typename SortedQuery<Components...>::SortPredicate predicate, QueryCallbacks callbacks = {})
-	{
-		auto query = queryManager.CreateSortedQuery<Components...>(predicate, callbacks);
-		query->InitializeEntityList(entityManager);
-		return query;
-	}
-
-	template <typename... Components>
 	Signature BuildSignature() const
 	{
 		return componentManager.BuildSignature<Components...>();
@@ -1374,24 +1279,6 @@ Query<Components...>* QueryManager::CreateQuery(QueryCallbacks callbacks)
 	QueryBase* baseQuery = queries[queryId].get();
 	return static_cast<Query<Components...>*>(baseQuery);
 }
-
-template <class ... Components>
-SortedQuery<Components...>* QueryManager::CreateSortedQuery(typename SortedQuery<Components...>::SortPredicate sortPredicate, QueryCallbacks callbacks)
-{
-	Signature signature = world.BuildSignature<Components...>();
-
-	signatures.insert(signature);
-
-	QueryId queryId = nextQueryId++;
-	queriesBySignature[signature].emplace_back(queryId);
-
-	ecs::Log("Create Sorted Query {}", queryId);
-	LogSignature(world, signature);
-	queries[queryId] = std::make_unique<SortedQuery<Components...>>(queryId, &world, signature, callbacks, sortPredicate);
-	QueryBase* baseQuery = queries[queryId].get();
-	return static_cast<SortedQuery<Components...>*>(baseQuery);
-}
-
 
 inline QueryBase* QueryManager::GetQueryUntypedById(QueryId queryId) const
 {

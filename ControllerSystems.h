@@ -31,6 +31,6 @@ struct SpawnerSystem : System<SpawnerSystem, Transform, Spawner>
 {
 	void OnRegistered() override;
 	void Update(const GameTime& time);
-	SortedQuery<Reject<Prefab>, SpawnSource, Transform>* spawnSourceQuery{};
+	Query<Reject<Prefab>, SpawnSource, Transform>* spawnSourceQuery{};
 };
 

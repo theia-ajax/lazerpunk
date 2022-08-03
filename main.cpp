@@ -319,7 +319,7 @@ int main(int argc, char* argv[])
 	world.AddComponents(cameraEntity,
 		Transform{},
 		CameraView{ viewExtents },
-		GameCameraControl{ map, 0, {{-2, -0.75f}, {2, 0.75f}} });
+		GameCameraControl{ map, playerEntity, {{-2, -0.75f}, {2, 0.75f}} });
 
 
 
